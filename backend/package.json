@@ -1,6 +1,7 @@
 {
   "name": "backend",
   "version": "1.0.1",
+  "type": "module",
   "description": "",
   "main": "index.js",
   "scripts": {
@@ -11,6 +12,7 @@
   "license": "ISC",
   "dependencies": {
     "@prisma/client": "^6.10.1",
+    "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
     "dotenv": "^17.0.0",
     "express": "^5.1.0",
