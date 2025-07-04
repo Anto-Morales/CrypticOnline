@@ -1,94 +1,294 @@
-import React from 'react';
-import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View, ImageSourcePropType } from 'react-native';
+import React, { useState } from 'react';
+import { 
+  View, 
+  Text, 
+  TextInput, 
+  TouchableOpacity, 
+  Image, 
+  StyleSheet, 
+  KeyboardAvoidingView, 
+  Platform,
+  ScrollView,
+  useWindowDimensions,
+  Dimensions
+} from 'react-native';
+import { useRouter } from 'expo-router';
 
-export default function HomeScreen() {
+const LoginScreen: React.FC = () => {
+  const router = useRouter();
+  const { width, height } = useWindowDimensions();
+  const isSmallScreen = width < 768;
+
+  const [email, setEmail] = useState<string>('');
+  const [password, setPassword] = useState<string>('');
+  const [errors, setErrors] = useState({
+    email: '',
+    password: ''
+  });
+
+  const validateEmail = (email: string): boolean => {
+    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return re.test(email);
+  };
+
+  const validateForm = (): boolean => {
+    let valid = true;
+    const newErrors = {
+      email: '',
+      password: ''
+    };
+
+    if (!email) {
+      newErrors.email = 'El email es requerido';
+      valid = false;
+    } else if (!validateEmail(email)) {
+      newErrors.email = 'Ingresa un email válido';
+      valid = false;
+    }
+
+    if (!password) {
+      newErrors.password = 'La contraseña es requerida';
+      valid = false;
+    } else if (password.length < 6) {
+      newErrors.password = 'La contraseña debe tener al menos 6 caracteres';
+      valid = false;
+    }
+
+    setErrors(newErrors);
+    return valid;
+  };
+
+  const handleLogin = () => {
+    if (validateForm()) {
+      console.log('Credenciales válidas, redirigiendo a /home');
+      router.push('/home');
+    }
+  };
+
+  const handleForgotPassword = () => {
+    router.push('/Nvpassword');
+  };
+
+  const handleRegister = () => {
+    router.push('/registro');
+  };
+
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <Image source={require('@/assets/images/Logo.png')} style={styles.leftImage} />
-        <Image source={require('@/assets/images/banner.jpg')} style={styles.rightImage} />
-      </View>
+    <KeyboardAvoidingView 
+      style={styles.container} 
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
+      <ScrollView contentContainerStyle={styles.scrollContainer}>
+        <View style={[
+          styles.mainContainer, 
+          isSmallScreen ? styles.columnLayout : styles.rowLayout
+        ]}>
+          <View style={[
+            styles.leftContainer,
+            { 
+              width: isSmallScreen ? '100%' : '50%',
+              padding: isSmallScreen ? 40 : 60
+            }
+          ]}>
+            <Image 
+              source={require('../../assets/images/Logo1.png')} 
+              style={[
+                styles.logo,
+                {
+                  width: isSmallScreen ? '80%' : 400,
+                  height: isSmallScreen ? 200 : 350,
+                  marginBottom: isSmallScreen ? 20 : -80,
+                  marginTop: isSmallScreen ? 20 : -70
+                }
+              ]}
+              resizeMode="contain"
+            />
 
-      <Text style={styles.title}>LO ÚLTIMO EN MODA</Text>
+            <Text style={styles.title}>INICIO DE SESIÓN</Text>
 
-      <View style={styles.productsRow}>
-        <Product name="PLAYERA 1" price="890" imageUri={require('@/assets/images/shirt1.png')} />
-        <Product name="PLAYERA 2" price="850" imageUri={require('@/assets/images/shirt2.png')} />
-        <Product name="PLAYERA 3" price="950" imageUri={require('@/assets/images/shirt3.png')} />
-      </View>
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={[
+                  styles.input,
+                  errors.email && styles.inputError,
+                  {
+                    width: isSmallScreen ? '100%' : 350,
+                    height: isSmallScreen ? 50 : 60,
+                    borderRadius: isSmallScreen ? 25 : 30
+                  }
+                ]}
+                placeholder="EMAIL"
+                value={email}
+                onChangeText={(text) => {
+                  setEmail(text);
+                  if (errors.email) setErrors({...errors, email: ''});
+                }}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+              {errors.email ? <Text style={styles.errorText}>{errors.email}</Text> : null}
+            </View>
 
-      <View style={styles.promo}>
-        <Text style={styles.title}>PREVENTA ACTIVA</Text>
-        <Image
-          source={{ uri: 'https://via.placeholder.com/200?text=Promo' }}
-          style={styles.promoImage}
-        />
-        <TouchableOpacity style={styles.button}>
-          <Text style={styles.buttonText}>COMPRAR AHORA</Text>
-        </TouchableOpacity>
-      </View>
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={[
+                  styles.input,
+                  errors.password && styles.inputError,
+                  {
+                    width: isSmallScreen ? '100%' : 350,
+                    height: isSmallScreen ? 50 : 60,
+                    borderRadius: isSmallScreen ? 25 : 30
+                  }
+                ]}
+                placeholder="CONTRASEÑA"
+                value={password}
+                onChangeText={(text) => {
+                  setPassword(text);
+                  if (errors.password) setErrors({...errors, password: ''});
+                }}
+                secureTextEntry
+              />
+              {errors.password ? <Text style={styles.errorText}>{errors.password}</Text> : null}
+            </View>
 
-      <Text style={styles.title}>LO ÚLTIMO EN MODA</Text>
+            <TouchableOpacity 
+              style={[
+                styles.button,
+                {
+                  width: isSmallScreen ? '100%' : 350,
+                  borderRadius: isSmallScreen ? 25 : 50,
+                  paddingVertical: isSmallScreen ? 12 : 15
+                }
+              ]} 
+              onPress={handleLogin}
+              testID="login-button"
+            >
+              <Text style={styles.buttonText}>INICIAR SESIÓN</Text>
+            </TouchableOpacity>
 
-      <View style={styles.productsRow}>
-        <Product name="PLAYERA 4" price="890" imageUri={require('@/assets/images/shirt4.png')} />
-        <Product name="PLAYERA 5" price="850" imageUri={require('@/assets/images/shirt1.png')} />
-        <Product name="PLAYERA 6" price="950" imageUri={require('@/assets/images/shirt2.png')}  />
-      </View>
-    </ScrollView>
+            <View style={styles.linkContainer}>
+              <TouchableOpacity onPress={handleForgotPassword}>
+                <Text style={[
+                  styles.linkText,
+                  { fontSize: isSmallScreen ? 16 : 19 }
+                ]}>¿Olvidaste tu contraseña?</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.linkContainer}>
+              <TouchableOpacity onPress={handleRegister}>
+                <Text style={[
+                  styles.linkText,
+                  { fontSize: isSmallScreen ? 16 : 19 }
+                ]}>¿No tienes cuenta? <Text style={styles.boldText}>REGÍSTRATE</Text></Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {!isSmallScreen && (
+            <View style={styles.rightContainer}>
+              <Image 
+                source={require('../../assets/images/modeloo.png')}
+                style={[
+                  styles.modelImage,
+                  {
+                    width: width * 0.5,
+                    height: height * 0.8,
+                    maxWidth: 850,
+                    maxHeight: 650
+                  }
+                ]}
+                resizeMode="contain"
+              />
+            </View>
+          )}
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
-}
-
-type ProductProps = {
-  name: string;
-  price: string;
-  imageUri: ImageSourcePropType | string;
 };
 
-function Product({ name, price, imageUri }: ProductProps) {
-  const source = typeof imageUri === 'string' ? { uri: imageUri } : imageUri;
-
-  return (
-    <View style={styles.product}>
-      <Image source={source} style={styles.productImage} />
-      <Text>{name}</Text>
-      <Text>${price} MXN</Text>
-    </View>
-  );
-}
+export default LoginScreen;
 
 const styles = StyleSheet.create({
-  container: { backgroundColor: '#fff' },
-  header: {
+  container: {
+    flex: 1,
+  },
+  scrollContainer: {
+    flexGrow: 1,
+  },
+  mainContainer: {
+    flex: 1,
+  },
+  rowLayout: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+  },
+  columnLayout: {
+    flexDirection: 'column',
+  },
+  leftContainer: {
+    justifyContent: 'center',
+    alignSelf: 'center',
+  },
+  rightContainer: {
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 10,
+    backgroundColor: '#f5f5f5',
+  },
+  logo: {
+    alignSelf: 'center',
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 30,
+    textAlign: 'center',
+  },
+  inputContainer: {
+    marginBottom: 15,
+    width: '100%',
+    maxWidth: 400,
+    alignSelf: 'center',
+  },
+  input: {
+    borderColor: '#000',
+    borderWidth: 1,
+    paddingHorizontal: 15,
+    alignSelf: 'center',
+  },
+  inputError: {
+    borderColor: 'red',
+  },
+  errorText: {
+    color: 'red',
+    fontSize: 12,
+    marginTop: 5,
+    marginLeft: 15,
+    alignSelf: 'flex-start',
+  },
+  button: {
     backgroundColor: '#000',
-    height: 150, // altura del contenedor para que las imágenes encajen bien
+    alignItems: 'center',
+    marginBottom: 15,
+    alignSelf: 'center',
   },
-  leftImage: {
-    width: 500,   // ancho mayor para imagen rectangular
-    height: 150,      
-    //aspectRatio: 3,     // ancho:alto = 3:1 (ajusta según la imagen)
-    resizeMode: 'stretch',
+  buttonText: {
+    color: '#fff',
+    fontWeight: 'bold',
   },
-  rightImage: {
-    width: 450,
-    height: 150,
-    //aspectRatio: 4,     // más rectangular, ajusta según la imagen
-    resizeMode: 'stretch',
+  linkText: {
+    color: '#000',
+    textAlign: 'center',
   },
-  title: { fontSize: 20, fontWeight: 'bold', margin: 10 },
-  productsRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 20 },
-  product: { alignItems: 'center' },
-  productImage: { 
-    width: 300, 
-    height: 300, 
-    resizeMode: 'contain' 
+  linkContainer: {
+    alignItems: 'center',
+    marginTop: 5,
   },
-  promo: { alignItems: 'center', padding: 20 },
-  promoImage: { width: 200, height: 200, resizeMode: 'contain' },
-  button: { backgroundColor: 'black', padding: 10, borderRadius: 5, marginTop: 10 },
-  buttonText: { color: 'white' },
+  boldText: {
+    fontWeight: 'bold',
+  },
+  modelImage: {
+    width: '100%',
+    height: '100%',
+  },
 });
