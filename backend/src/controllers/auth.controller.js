@@ -26,7 +26,7 @@ export const loginUser = async (req, res) => {
     const token = jwt.sign(
       { userId: user.id, email: user.email },
       process.env.JWT_SECRET,
-      { expiresIn: '7d' } // duración del token
+      { expiresIn: '7d' }, // duración del token
     );
 
     res.status(200).json({
@@ -36,11 +36,12 @@ export const loginUser = async (req, res) => {
         id: user.id,
         email: user.email,
         nombres: user.nombres,
-        role: user.role
-      }
+        role: user.role,
+      },
     });
   } catch (error) {
     console.error('[ERROR loginUser]', error);
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 };
+//esto es una prueba
