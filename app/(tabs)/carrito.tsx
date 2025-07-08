@@ -62,18 +62,7 @@ const CartScreen: React.FC = () => {
             placeholderTextColor="#999"
           />
         </View>
-        
-        <View style={styles.iconsContainer}>
-          <TouchableOpacity onPress={() => router.push('/notificaciones')}>
-            <Image source={require('../../assets/images/notif.png')} style={styles.icon} />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.push('/carrito')}>
-            <Image source={require('../../assets/images/carro.jpg')} style={styles.icon} />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.push('/perfil')}>
-            <Image source={require('../../assets/images/perfil.png')} style={styles.icon} />
-          </TouchableOpacity>
-        </View>
+
       </View>
 
       <ScrollView style={styles.contentContainer}>
