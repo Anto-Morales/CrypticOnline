@@ -61,7 +61,7 @@ const LoginScreen: React.FC = () => {
   const handleLogin = () => {
     if (validateForm()) {
       console.log('Credenciales válidas, redirigiendo a /home');
-      router.push('/home');
+      router.push('/home' );
     }
   };
 
