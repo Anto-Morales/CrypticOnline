@@ -21,7 +21,7 @@ const NvpasswordScreen: React.FC = () => {
 
   const handleSendEmail = () => {
     console.log(`Recovery email sent to: ${email}`);
-    router.push('../(tabs)/verificacion');
+    router.push('../auth/verificacion');
   };
 
   const handleGoBack = () => {
@@ -63,7 +63,7 @@ const NvpasswordScreen: React.FC = () => {
             />
 
             <TouchableOpacity style={[styles.button, isSmallScreen && styles.smallButton]} onPress={handleSendEmail}>
-              <Text style={styles.buttonText}>INICIAR SESIÓN</Text>
+              <Text style={styles.buttonText}>Enviar Gmail</Text>
             </TouchableOpacity>
           </View>
 

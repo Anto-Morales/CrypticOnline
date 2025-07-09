@@ -37,11 +37,11 @@ const VerifyCodeScreen: React.FC = () => {
 
   const handleSubmit = () => {
     console.log(`Verification code: ${code.join('')}`);
-    router.push('../(tabs)/inicio');
+    router.push('../auth/NewPassword');
   };
 
   const handleGoBack = () => {
-    router.push('../(tabs)/Nvpassword');
+    router.push('../auth/Nvpassword');
   };
 
   return (
@@ -86,6 +86,7 @@ const VerifyCodeScreen: React.FC = () => {
               <Text style={[styles.resendText, isSmallScreen && styles.smallResendText]}>
                 ¿NO RECIBISTE EL CORREO? REENVIAR CODIGO
               </Text>
+             
             </TouchableOpacity>
 
             <TouchableOpacity 
