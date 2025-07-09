@@ -31,7 +31,7 @@ const NewPasswordScreen: React.FC = () => {
     }
 
     console.log('Nueva contraseña:', newPassword);
-    router.push('/(tabs)');
+    router.push('../(tabs)');
   };
 
   const handleGoBack = () => {

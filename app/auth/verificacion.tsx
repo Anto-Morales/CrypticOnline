@@ -37,11 +37,11 @@ const VerifyCodeScreen: React.FC = () => {
 
   const handleSubmit = () => {
     console.log(`Verification code: ${code.join('')}`);
-    router.push('/(tabs)/home');
+    router.push('../(tabs)/inicio');
   };
 
   const handleGoBack = () => {
-    router.push('/(tabs)/Nvpassword');
+    router.push('../(tabs)/Nvpassword');
   };
 
   return (

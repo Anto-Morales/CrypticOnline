@@ -21,11 +21,11 @@ const NvpasswordScreen: React.FC = () => {
 
   const handleSendEmail = () => {
     console.log(`Recovery email sent to: ${email}`);
-    router.push('/(tabs)/verificacion');
+    router.push('../(tabs)/verificacion');
   };
 
   const handleGoBack = () => {
-    router.push('/(tabs)');
+    router.push('../(tabs)');
   };
 
   return (

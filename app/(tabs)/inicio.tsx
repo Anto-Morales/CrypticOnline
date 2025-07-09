@@ -1,6 +1,5 @@
-  import React from 'react';
-  import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet, ScrollView, FlatList } from 'react-native';
   import { useRouter } from 'expo-router';
+import { FlatList, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
   
 
   const HomeScreen = () => {
@@ -12,7 +11,7 @@
       { id: '2', name: 'PLAYERA 2', price: '1500 MXN', season: 'TEMPORADA 3', image: require('../../assets/images/shirt2.png') },
       { id: '3', name: 'PLAYERA 3', price: '1000 MXN', season: 'TEMPORADA 4', image: require('../../assets/images/shirt3.png') },
     ];
-
+    
     const featuredProducts = [
       { id: '4', name: 'PLAYER A', price: '3909 MXN', image: require('../../assets/images/shirt1.png') },
       { id: '5', name: 'PLAYER B', price: '1500 MXN', image: require('../../assets/images/shirt2.png') },
@@ -20,8 +19,9 @@
     ];
 
     const navigateToProduct = (id: string) => {
-      router.push({ pathname: '/productos', params: { id } });
+      router.push({ pathname: '../productos', params: { id } });
     };
+
 
     return (
       <View style={styles.container}>

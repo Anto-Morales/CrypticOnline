@@ -100,12 +100,12 @@ const RegisterScreen: React.FC = () => {
   const handleRegister = () => {
     if (validateForm()) {
       console.log('Datos del formulario:', formData);
-      router.push('/(tabs)/Nvpassword');
+      router.push('../(tabs)/Nvpassword');
     }
   };
 
   const handleLoginRedirect = () => {
-    router.push('/(tabs)');
+    router.push('../(tabs)');
   };
 
   return (
