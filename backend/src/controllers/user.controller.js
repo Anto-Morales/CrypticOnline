@@ -16,7 +16,8 @@ export const registerUser = async (req, res) => {
     estado,
     codigoPostal,
     referencias,
-    wallet
+    wallet,
+    role, // 👈 se agrega aquí
   } = req.body;
 
   if (!email || !password || !nombres || !apellidoPaterno) {
@@ -29,8 +30,8 @@ export const registerUser = async (req, res) => {
       return res.status(409).json({ error: 'El correo ya está registrado' });
     }
 
-    // Hashear la contraseña antes de guardar
-    const hashedPassword = await bcrypt.hash(password, 10); // 10 = salt rounds
+    // Hashear la contraseña
+    const hashedPassword = await bcrypt.hash(password, 10);
 
     const newUser = await prisma.user.create({
       data: {
@@ -38,7 +39,7 @@ export const registerUser = async (req, res) => {
         apellidoPaterno,
         apellidoMaterno,
         email,
-        password: hashedPassword, 
+        password: hashedPassword,
         telefono,
         calle,
         numero,
@@ -47,7 +48,8 @@ export const registerUser = async (req, res) => {
         estado,
         codigoPostal,
         referencias,
-        wallet
+        wallet,
+        role: role || 'customer', // 👈 este campo es la clave
       },
     });
 
@@ -57,33 +59,12 @@ export const registerUser = async (req, res) => {
         id: newUser.id,
         email: newUser.email,
         nombres: newUser.nombres,
+        role: newUser.role, // 👈 útil para verificar que se guardó como admin
         createdAt: newUser.createdAt,
-      } 
+      },
     });
-
   } catch (error) {
     console.error('[ERROR registerUser]', error);
     res.status(500).json({ error: 'Error interno del servidor' });
-  }
-};
-
-export const makeUserAdmin = async (req, res) => {
-  const { id } = req.params;
-
-  // Solo admins pueden hacer esto
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'No autorizado. Solo admins pueden cambiar roles.' });
-  }
-
-  try {
-    const updated = await prisma.user.update({
-      where: { id: Number(id) },
-      data: { role: 'admin' },
-    });
-
-    res.json({ message: 'Usuario promovido a admin', user: updated });
-  } catch (error) {
-    console.error('[ERROR makeUserAdmin]', error);
-    res.status(500).json({ error: 'Error al cambiar el rol' });
   }
 };

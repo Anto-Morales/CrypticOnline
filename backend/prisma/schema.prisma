@@ -6,7 +6,6 @@
 
 generator client {
   provider = "prisma-client-js"
-
 }
 
 datasource db {
@@ -14,55 +13,58 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-
 model User {
-  id             Int      @id @default(autoincrement())
-  
-  // Datos personales
-  nombres        String
+  id              Int       @id @default(autoincrement())
+  nombres         String
   apellidoPaterno String
   apellidoMaterno String
-  email          String   @unique
-  password       String
-  telefono       String
-
-  // Datos de domicilio
-  calle          String
-  numero         String
-  colonia        String
-  ciudad         String
-  estado         String
-  codigoPostal   String
-  referencias    String
-
-  // Otros campos
-  wallet         String?
-  role           String   @default("customer")
-  isActive       Boolean  @default(true)
-  orders         Order[]
-  createdAt      DateTime @default(now())
+  email           String    @unique
+  password        String
+  telefono        String
+  calle           String
+  numero          String
+  colonia         String
+  ciudad          String
+  estado          String
+  codigoPostal    String
+  referencias     String
+  wallet          String?
+  role            String    @default("customer")
+  isActive        Boolean   @default(true)
+  orders          Order[]
+  products        Product[]
+  createdAt       DateTime  @default(now())
 }
 
 model Product {
-  id          Int      @id @default(autoincrement())
+  id          Int         @id @default(autoincrement())
   name        String
   description String
   price       Float
   imageUrl    String
-  user        User     @relation(fields: [userId], references: [id])
+  user        User        @relation(fields: [userId], references: [id])
   userId      Int
-  createdAt   DateTime @default(now())
+  createdAt   DateTime    @default(now())
+  orderItems  OrderItem[]
 }
 
-
-
 model Order {
-  id         Int      @id @default(autoincrement())
-  user       User     @relation(fields: [userId], references: [id])
+  id         Int         @id @default(autoincrement())
   userId     Int
-  product    Product  @relation(fields: [productId], references: [id])
-  productId  Int
+  user       User        @relation(fields: [userId], references: [id])
   status     String
   txHash     String?
-  createdAt  DateTime @default(now())
+  createdAt  DateTime    @default(now())
+  orderItems OrderItem[]
+}
+
+model OrderItem {
+  id        Int     @id @default(autoincrement())
+  orderId   Int
+  productId Int
+  quantity  Int     @default(1)
+  order     Order   @relation(fields: [orderId], references: [id])
+  product   Product @relation(fields: [productId], references: [id])
+
+  @@unique([orderId, productId])
 }
