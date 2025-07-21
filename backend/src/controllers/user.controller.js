@@ -17,7 +17,7 @@ export const registerUser = async (req, res) => {
     codigoPostal,
     referencias,
     wallet,
-    role, // 👈 se agrega aquí
+    role,
   } = req.body;
 
   if (!email || !password || !nombres || !apellidoPaterno) {
@@ -31,6 +31,8 @@ export const registerUser = async (req, res) => {
     }
 
     // Hashear la contraseña
+    // Aca es donde se hace la encriptacion de la contraseña
+    // bcrypt es una libreria que se utiliza para encriptar contraseñas
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const newUser = await prisma.user.create({
@@ -49,7 +51,7 @@ export const registerUser = async (req, res) => {
         codigoPostal,
         referencias,
         wallet,
-        role: role || 'customer', // 👈 este campo es la clave
+        role: role || 'customer',
       },
     });
 
@@ -59,7 +61,7 @@ export const registerUser = async (req, res) => {
         id: newUser.id,
         email: newUser.email,
         nombres: newUser.nombres,
-        role: newUser.role, // 👈 útil para verificar que se guardó como admin
+        role: newUser.role,
         createdAt: newUser.createdAt,
       },
     });

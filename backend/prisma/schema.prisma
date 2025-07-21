@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,6 +5,20 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  CANCELLED
+  REFUNDED
+  FAILED
+}
+
+enum PaymentMethod {
+  PAYPAL
+  MERCADOPAGO
+  CRYPTO
 }
 
 model User {
@@ -31,31 +39,50 @@ model User {
   wallet          String?
   role            String    @default("customer")
   isActive        Boolean   @default(true)
-  orders          Order[]
-  products        Product[]
+  orders          Order[]   @relation(name: "UserOrders")
+  products        Product[] @relation(name: "UserProducts")
   createdAt       DateTime  @default(now())
 }
 
 model Product {
-  id          Int         @id @default(autoincrement())
-  name        String
-  description String
-  price       Float
-  imageUrl    String
-  user        User        @relation(fields: [userId], references: [id])
-  userId      Int
-  createdAt   DateTime    @default(now())
-  orderItems  OrderItem[]
+  id              Int         @id @default(autoincrement())
+  name            String
+  description     String
+  price           Float
+  imageUrl        String
+  userId          Int
+  stock           Int         @default(0)
+  user            User  @relation(name: "UserProducts", fields: [userId], references: [id], onDelete: Cascade)
+  createdAt       DateTime    @default(now())
+  orderItems      OrderItem[]
+  discounts       Discount[]
+}
+
+model Discount {
+  id          Int       @id @default(autoincrement())
+  productId   Int
+  product     Product   @relation(fields: [productId], references: [id])
+  percentage  Float     // Ej: 10.0 para 10%
+  startDate   DateTime
+  endDate     DateTime
+  createdAt   DateTime  @default(now())
 }
 
 model Order {
-  id         Int         @id @default(autoincrement())
-  userId     Int
-  user       User        @relation(fields: [userId], references: [id])
-  status     String
-  txHash     String?
-  createdAt  DateTime    @default(now())
-  orderItems OrderItem[]
+  id             Int           @id @default(autoincrement())
+  userId         Int
+  user           User  @relation(name: "UserOrders", fields: [userId], references: [id], onDelete: Cascade)
+  status         OrderStatus   @default(PENDING)
+  total          Float
+  paymentMethod  PaymentMethod?
+  paymentId      String?       // ID externo (PayPal, MP, etc.)
+  txHash         String?       // Blockchain
+  paidAt         DateTime?
+  cancelledAt    DateTime?
+  refundedAt     DateTime?
+  createdAt      DateTime      @default(now())
+  orderItems     OrderItem[]
+  paymentDetails Payment[]
 }
 
 model OrderItem {
@@ -63,8 +90,20 @@ model OrderItem {
   orderId   Int
   productId Int
   quantity  Int     @default(1)
+  price     Float   // Precio congelado del producto
   order     Order   @relation(fields: [orderId], references: [id])
   product   Product @relation(fields: [productId], references: [id])
 
   @@unique([orderId, productId])
+}
+
+model Payment {
+  id           Int      @id @default(autoincrement())
+  orderId      Int
+  provider     String   // Ej: PAYPAL, MERCADOPAGO
+  status       String   // Ej: PENDING, COMPLETED, FAILED
+  referenceId  String?  // ID externo del proveedor
+  amount       Float
+  createdAt    DateTime @default(now())
+  order        Order    @relation(fields: [orderId], references: [id])
 }

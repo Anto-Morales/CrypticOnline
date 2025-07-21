@@ -26,6 +26,8 @@ export const loginUser = async (req, res) => {
     }
 
     // Generar token JWT
+    // AQUI ES DONDE SE GENERA EL TOKEN SE SERVIRA PARA LA VERIFICACION DE AUTENTICACION
+    // El token contiene el userId, email y role del usuario
     const token = jwt.sign(
       {
         userId: user.id,

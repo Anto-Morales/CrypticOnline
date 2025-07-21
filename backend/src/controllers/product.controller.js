@@ -1,24 +1,41 @@
 import prisma from '../prisma/db.js';
 
 // Crear producto
+
 export const createProduct = async (req, res) => {
   try {
-    const { name, description, price, imageUrl } = req.body;
+    const {
+      name,
+      description,
+      price,
+      imageUrl,
+      userId,
+      discount, // { percentage, startDate, endDate }
+    } = req.body;
 
-    const product = await prisma.product.create({
+    const newProduct = await prisma.product.create({
       data: {
         name,
         description,
-        price: Number(price),
+        price,
         imageUrl,
-        userId: req.user.userId,
+        userId,
+        discounts: discount
+          ? {
+              create: {
+                percentage: discount.percentage,
+                startDate: new Date(discount.startDate),
+                endDate: new Date(discount.endDate),
+              },
+            }
+          : undefined,
       },
     });
 
-    res.status(201).json(product);
+    res.status(201).json(newProduct);
   } catch (error) {
-    console.error('[ERROR createProduct]', error); // 👈 importante
-    res.status(500).json({ error: 'Error creando producto', message: error.message });
+    console.error('Error al crear producto:', error);
+    res.status(500).json({ error: 'Error al crear producto' });
   }
 };
 

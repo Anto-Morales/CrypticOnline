@@ -1,40 +1,67 @@
 import prisma from '../prisma/db.js';
 
 // Crear pedido con varios productos
-export const createOrderWithItems = async (req, res) => {
-  const { status, txHash, items } = req.body;
-  // items = [{ productId: 1, quantity: 2 }, { productId: 3, quantity: 1 }, ...]
-
-  if (!items || !Array.isArray(items) || items.length === 0) {
-    return res.status(400).json({ error: 'Debe incluir al menos un producto en el pedido' });
-  }
-
+export const createOrder = async (req, res) => {
   try {
-    const order = await prisma.order.create({
+    const { userId, items, paymentMethod } = req.body;
+
+    // items: [{ productId, quantity }]
+
+    let total = 0;
+    const orderItemsData = [];
+
+    for (const item of items) {
+      const product = await prisma.product.findUnique({
+        where: { id: item.productId },
+        include: {
+          discounts: true,
+        },
+      });
+
+      if (!product) {
+        return res.status(404).json({ error: `Producto ${item.productId} no encontrado` });
+      }
+
+      let finalPrice = product.price;
+
+      // Si tiene un descuento activo
+      const now = new Date();
+      const activeDiscount = product.discounts.find(
+        (d) => new Date(d.startDate) <= now && now <= new Date(d.endDate)
+      );
+
+      if (activeDiscount) {
+        finalPrice = finalPrice * (1 - activeDiscount.percentage / 100);
+      }
+
+      total += finalPrice * item.quantity;
+
+      orderItemsData.push({
+        productId: item.productId,
+        quantity: item.quantity,
+        price: finalPrice,
+      });
+    }
+
+    const newOrder = await prisma.order.create({
       data: {
-        userId: req.user.userId,
-        status: status || 'pendiente',
-        txHash,
+        userId,
+        status: 'PENDING',
+        total,
+        paymentMethod,
         orderItems: {
-          create: items.map(({ productId, quantity }) => ({
-            productId,
-            quantity: quantity || 1,
-          })),
+          create: orderItemsData,
         },
       },
       include: {
-        orderItems: {
-          include: {
-            product: true,
-          },
-        },
+        orderItems: true,
       },
     });
 
-    res.status(201).json({ message: 'Pedido creado', order });
+    res.status(201).json(newOrder);
   } catch (error) {
-    console.error('[ERROR createOrderWithItems]', error);
-    res.status(500).json({ error: 'Error al crear el pedido' });
+    console.error('Error al crear orden:', error);
+    res.status(500).json({ error: 'Error al crear orden' });
   }
 };
 
