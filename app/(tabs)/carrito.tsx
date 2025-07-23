@@ -90,7 +90,20 @@ const CartScreen: React.FC = () => {
   };
 
   const handleComprarCarrito = () => {
-    router.push('/(tabs)/pago');
+    // Enviamos los productos del carrito como parámetro
+    router.push({
+      pathname: '/(tabs)/pago',
+      params: {
+        cartItems: JSON.stringify(
+          cartItems.map((item) => ({
+            title: item.name,
+            quantity: 1, // Puedes ajustar la cantidad si tienes ese dato
+            unit_price: item.price,
+          }))
+        ),
+        productoId: 'carrito',
+      },
+    });
   };
 
   return (

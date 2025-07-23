@@ -1,5 +1,6 @@
 import { useRouter } from 'expo-router';
 import {
+  Dimensions,
   FlatList,
   Image,
   ScrollView,
@@ -7,9 +8,8 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View,
-  Dimensions,
   useColorScheme,
+  View,
 } from 'react-native';
 
 const HomeScreen = () => {
@@ -68,6 +68,34 @@ const HomeScreen = () => {
     router.push({ pathname: '../productos', params: { id } });
   };
 
+  // Ajuste responsivo para las tarjetas de productos destacados
+  const featuredCardStyle = {
+    width: screenWidth < 400 ? screenWidth * 0.9 : screenWidth * 0.45,
+    marginRight: 15,
+    backgroundColor: '#111',
+    borderRadius: 10,
+    padding: 12,
+    alignItems: 'center' as const,
+    marginBottom: 15,
+  };
+  const featuredImageStyle = {
+    width: featuredCardStyle.width * 0.85,
+    height: featuredCardStyle.width * 0.85,
+    marginBottom: -40,
+  };
+
+  const navigateToProductDetail = (product) => {
+    router.push({
+      pathname: '/(tabs)/producto-detalle',
+      params: {
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        image: product.image,
+      },
+    });
+  };
+
   // Estilos responsivos para las cards
   const productCardStyle = {
     width: screenWidth * 0.7 > 430 ? 430 : screenWidth * 0.7,
@@ -81,19 +109,6 @@ const HomeScreen = () => {
     width: screenWidth * 0.62 > 380 ? 380 : screenWidth * 0.62,
     height: screenWidth * 0.62 > 380 ? 380 : screenWidth * 0.62,
     marginBottom: -52,
-  };
-  const featuredCardStyle = {
-    width: screenWidth * 0.7 > 430 ? 430 : screenWidth * 0.7,
-    marginRight: 15,
-    backgroundColor: '#111',
-    borderRadius: 10,
-    padding: 12,
-    alignItems: 'center' as const,
-  };
-  const featuredImageStyle = {
-    width: screenWidth * 0.62 > 380 ? 380 : screenWidth * 0.62,
-    height: screenWidth * 0.62 > 380 ? 380 : screenWidth * 0.62,
-    marginBottom: -80,
   };
 
   return (
@@ -167,7 +182,7 @@ const HomeScreen = () => {
             <TouchableOpacity
               key={product.id}
               style={featuredCardStyle}
-              onPress={() => navigateToProduct(product.id)}
+              onPress={() => navigateToProductDetail(product)}
             >
               <Image source={product.image} style={featuredImageStyle} resizeMode="contain" />
               <Text style={styles.featuredName}>{product.name}</Text>
@@ -300,6 +315,8 @@ const styles = StyleSheet.create({
     right: 0,
     backgroundColor: 'rgba(0,0,0,0.6)',
     padding: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   presaleText: {
     color: '#fff',

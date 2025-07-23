@@ -13,9 +13,9 @@ export default function PerfilProfesionalScreen() {
       <View
         style={[styles.card, { backgroundColor: cardBg, borderColor: isDark ? '#fff' : '#000' }]}
       >
-        <Image source={{ uri: 'https://i.pravatar.cc/150?img=12' }} style={styles.avatar} />
-        <Text style={[styles.nombre, { color: textColor }]}>Antonio Arellano</Text>
-        <Text style={[styles.info, { color: infoColor }]}>antonio@correo.com</Text>
+        <Image source={{ uri: 'assets\images\gearsOfWar.jpg' }} style={styles.avatar} />
+        <Text style={[styles.nombre, { color: textColor }]}>Angel Eduardo</Text>
+        <Text style={[styles.info, { color: infoColor }]}>angel_eduardo4@icloud.com</Text>
         <Text style={[styles.profesion, { color: textColor }]}>Desarrollador Full Stack</Text>
         <Text style={[styles.descripcion, { color: infoColor }]}>
           Apasionado por la tecnología, con experiencia en desarrollo web y móvil. Siempre

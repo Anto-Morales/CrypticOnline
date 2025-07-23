@@ -3,6 +3,7 @@ import { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -18,22 +19,26 @@ export default function PagoScreen() {
   const textColor = isDark ? '#fff' : '#000';
   const [loading, setLoading] = useState(false);
   const params = useLocalSearchParams();
+  // cartItems debe ser un array de productos [{ title, quantity, unit_price }]
+  const cartItems = params.cartItems
+    ? JSON.parse(params.cartItems as string)
+    : [{ title: 'Producto', quantity: 1, unit_price: 100 }];
 
-  // Ejemplo de función para Mercado Pago
+  // Función para Mercado Pago
   const handleMercadoPago = async () => {
     setLoading(true);
     try {
-      // Cambia la URL por la de tu backend
-      const response = await fetch('https://TU_BACKEND_URL/api/mercadopago', {
+      const response = await fetch('http://TU_IP_LOCAL:3000/api/payments/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ productoId: params.productoId || null }),
+        body: JSON.stringify({
+          items: cartItems,
+          orderId: params.productoId || 'carrito',
+        }),
       });
       const data = await response.json();
       if (data.init_point) {
-        // Redirige al usuario al link de Mercado Pago
-        Alert.alert('Redirigiendo a Mercado Pago', data.init_point);
-        // Aquí puedes usar Linking.openURL(data.init_point) si quieres abrir el navegador
+        Linking.openURL(data.init_point);
       } else {
         Alert.alert('Error', 'No se pudo iniciar el pago');
       }
