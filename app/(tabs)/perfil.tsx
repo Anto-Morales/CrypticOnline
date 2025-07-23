@@ -1,6 +1,10 @@
-import { View, Text, StyleSheet, Image, Button, useColorScheme } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { Button, Image, StyleSheet, Text, useColorScheme, View } from 'react-native';
 
 export default function PerfilProfesionalScreen() {
+  const router = useRouter();
   const scheme = useColorScheme();
   const isDark = scheme === 'dark';
   const containerBg = isDark ? '#000' : '#fff';
@@ -8,15 +12,80 @@ export default function PerfilProfesionalScreen() {
   const textColor = isDark ? '#fff' : '#000';
   const infoColor = isDark ? '#ccc' : 'gray';
 
+  const [userData, setUserData] = useState({
+    nombres: 'Cargando...',
+    email: 'Cargando...',
+    apellidoPaterno: '',
+    apellidoMaterno: '',
+    telefono: '',
+    role: 'customer',
+  });
+
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getUserData();
+  }, []);
+
+  const getUserData = async () => {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      if (token) {
+        const response = await fetch('http://192.168.0.108:3000/api/user/profile', {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        console.log('Response status:', response.status);
+        const text = await response.text();
+        console.log('Response text:', text);
+
+        if (response.ok) {
+          const data = JSON.parse(text);
+          setUserData(data.user);
+        } else {
+          console.error('Error en la respuesta:', text);
+        }
+      }
+    } catch (error) {
+      console.error('Error obteniendo datos del usuario:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await AsyncStorage.removeItem('token');
+      router.push('/auth/login');
+    } catch (error) {
+      console.error('Error al cerrar sesión:', error);
+    }
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: containerBg }]}>
       <View
         style={[styles.card, { backgroundColor: cardBg, borderColor: isDark ? '#fff' : '#000' }]}
       >
-        <Image source={{ uri: 'assets\images\gearsOfWar.jpg' }} style={styles.avatar} />
-        <Text style={[styles.nombre, { color: textColor }]}>Angel Eduardo</Text>
-        <Text style={[styles.info, { color: infoColor }]}>angel_eduardo4@icloud.com</Text>
-        <Text style={[styles.profesion, { color: textColor }]}>Desarrollador Full Stack</Text>
+        <Image source={require('../../assets/images/gearsOfWar.jpg')} style={styles.avatar} />
+        <Text style={[styles.nombre, { color: textColor }]}>
+          {loading
+            ? 'Cargando...'
+            : `${userData.nombres} ${userData.apellidoPaterno} ${userData.apellidoMaterno}`}
+        </Text>
+        <Text style={[styles.info, { color: infoColor }]}>
+          {loading ? 'Cargando...' : userData.email}
+        </Text>
+        <Text style={[styles.info, { color: infoColor }]}>
+          {loading ? 'Cargando...' : userData.telefono}
+        </Text>
+        <Text style={[styles.profesion, { color: textColor }]}>
+          {userData.role === 'admin' ? 'Administrador' : 'Cliente'}
+        </Text>
         <Text style={[styles.descripcion, { color: infoColor }]}>
           Apasionado por la tecnología, con experiencia en desarrollo web y móvil. Siempre
           aprendiendo y buscando nuevos retos.
@@ -24,7 +93,7 @@ export default function PerfilProfesionalScreen() {
         <View style={{ marginTop: 30 }}>
           <Button title="Editar perfil" onPress={() => {}} color={isDark ? '#fff' : '#000'} />
           <View style={{ marginTop: 10 }} />
-          <Button title="Cerrar sesión" onPress={() => {}} color="red" />
+          <Button title="Cerrar sesión" onPress={handleLogout} color="red" />
         </View>
       </View>
     </View>

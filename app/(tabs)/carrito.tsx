@@ -6,20 +6,11 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   useColorScheme,
   View,
 } from 'react-native';
-
-interface CartItem {
-  id: number;
-  name: string;
-  size: string;
-  status: string;
-  price: number;
-  image: any;
-}
+import { useCarrito } from '../context/CarritoContext';
 
 const CartScreen: React.FC = () => {
   const router = useRouter();
@@ -27,28 +18,11 @@ const CartScreen: React.FC = () => {
   const scheme = useColorScheme();
   const isDark = scheme === 'dark';
 
-  const cartItems: CartItem[] = [
-    {
-      id: 1,
-      name: 'PLAYERA 1',
-      size: 'TALLA MEDIANA',
-      status: 'TU PEDIDO ESTA EN PREPARACION LLEGA ENTRE EL 23 DE JULIO A 27',
-      price: 999,
-      image: require('../../assets/images/shirt1.png'),
-    },
-    {
-      id: 2,
-      name: 'PLAYERA 1',
-      size: 'TALLA MEDIANA',
-      status: 'TU PEDIDO ESTA EN PREPARACION LLEGA ENTRE EL 23 DE JULIO A 27',
-      price: 999,
-      image: require('../../assets/images/shirt1.png'),
-    },
-  ];
+  const carrito = useCarrito();
 
   const shippingCost = 200;
-  const totalProducts = cartItems.length;
-  const totalProductsPrice = cartItems.reduce((sum, item) => sum + item.price, 0);
+  const totalProducts = carrito.items.length;
+  const totalProductsPrice = carrito.items.reduce((sum, item) => sum + item.unit_price, 0);
   const totalToPay = totalProductsPrice + shippingCost;
 
   // Estilos responsivos
@@ -85,20 +59,20 @@ const CartScreen: React.FC = () => {
     backgroundColor: cardBg,
   };
 
-  const handleComprarProducto = (item: CartItem) => {
-    router.push({ pathname: '/(tabs)/pago', params: { productoId: item.id } });
+  const handleComprarProducto = (item: any) => {
+    router.push({ pathname: '/pago/pago', params: { productoId: item.id } });
   };
 
   const handleComprarCarrito = () => {
     // Enviamos los productos del carrito como parámetro
     router.push({
-      pathname: '/(tabs)/pago',
+      pathname: '/pago/pago',
       params: {
         cartItems: JSON.stringify(
-          cartItems.map((item) => ({
-            title: item.name,
-            quantity: 1, // Puedes ajustar la cantidad si tienes ese dato
-            unit_price: item.price,
+          carrito.items.map((item) => ({
+            title: item.title,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
           }))
         ),
         productoId: 'carrito',
@@ -106,54 +80,111 @@ const CartScreen: React.FC = () => {
     });
   };
 
+  // Elimina las tarjetas de prueba y muestra los productos reales del carrito
   return (
     <View style={[styles.container, { backgroundColor: containerBg }]}>
-      {/* Header with logo, search and icons */}
-      <View style={styles.header}>
+      {/* Solo el logo centrado */}
+      <View style={{ alignItems: 'center', marginTop: 20, marginBottom: 10 }}>
         <Image source={require('../../assets/images/Logo.png')} style={styles.companyLogo} />
-
-        <View style={styles.searchContainer}>
-          <TextInput
-            style={styles.searchBar}
-            placeholder="Buscar productos..."
-            placeholderTextColor="#999"
-          />
-        </View>
       </View>
-
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ alignItems: 'center' }}>
-        {cartItems.map((item) => (
-          <View key={item.id} style={[styles.itemContainer, itemContainerStyle]}>
-            <Image source={item.image} style={itemImageStyle} resizeMode="contain" />
-            <View style={styles.itemDetails}>
-              <Text style={[styles.itemName, { color: isDark ? '#fff' : '#000' }]}>
-                {item.name}
-              </Text>
-              <Text style={[styles.itemSize, { color: isDark ? '#ccc' : '#555' }]}>
-                {item.size}
-              </Text>
-              <Text style={[styles.itemStatus, { color: isDark ? '#aaa' : '#333' }]}>
-                {item.status}
-              </Text>
-              <Text
-                style={[styles.itemPrice, { color: isDark ? '#fff' : '#000' }]}
-              >{`$ ${item.price} MXN`}</Text>
-              <View style={styles.buttonsRow}>
-                <TouchableOpacity style={[styles.secondaryButton, { borderColor }]}>
-                  <Text style={{ color: isDark ? '#fff' : '#000' }}>ELIMINAR DEL CARRITO</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.primaryButton, { backgroundColor: isDark ? '#fff' : '#000' }]}
-                  onPress={() => handleComprarProducto(item)}
-                >
-                  <Text style={[styles.primaryButtonText, { color: isDark ? '#000' : '#fff' }]}>
-                    COMPRAR
+        {carrito.items.length === 0 ? (
+          <Text style={{ color: isDark ? '#fff' : '#000', marginTop: 40 }}>
+            Tu carrito está vacío
+          </Text>
+        ) : (
+          carrito.items.map((item, idx) => (
+            <View key={idx} style={[styles.itemContainer, itemContainerStyle]}>
+              <Image
+                source={
+                  item.image ? { uri: item.image } : require('../../assets/images/shirt1.png')
+                }
+                defaultSource={require('../../assets/images/shirt1.png')}
+                style={itemImageStyle}
+                resizeMode="contain"
+              />
+              <View style={styles.itemDetails}>
+                <Text style={[styles.itemName, { color: isDark ? '#fff' : '#000' }]}>
+                  {item.title}
+                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 5 }}>
+                  <Text style={[styles.itemSize, { color: isDark ? '#ccc' : '#555' }]}>
+                    Talla:{' '}
                   </Text>
-                </TouchableOpacity>
+                  {['S', 'M', 'L', 'XL'].map((t) => (
+                    <TouchableOpacity
+                      key={t}
+                      style={{
+                        marginHorizontal: 2,
+                        padding: 4,
+                        borderRadius: 6,
+                        backgroundColor: item.talla === t ? '#009ee3' : 'transparent',
+                      }}
+                      onPress={() => carrito.updateItem(item.id, { talla: t })}
+                    >
+                      <Text
+                        style={{
+                          color: item.talla === t ? '#fff' : isDark ? '#ccc' : '#555',
+                          fontWeight: item.talla === t ? 'bold' : 'normal',
+                        }}
+                      >
+                        {t}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 5 }}>
+                  <Text style={[styles.itemPrice, { color: isDark ? '#fff' : '#000' }]}>
+                    Cantidad:{' '}
+                  </Text>
+                  <TouchableOpacity
+                    style={{
+                      padding: 4,
+                      backgroundColor: '#eee',
+                      borderRadius: 6,
+                      marginHorizontal: 2,
+                    }}
+                    onPress={() =>
+                      carrito.updateItem(item.id, { quantity: Math.max(1, item.quantity - 1) })
+                    }
+                  >
+                    <Text>-</Text>
+                  </TouchableOpacity>
+                  <Text
+                    style={[
+                      styles.itemPrice,
+                      { color: isDark ? '#fff' : '#000', marginHorizontal: 6 },
+                    ]}
+                  >
+                    {item.quantity}
+                  </Text>
+                  <TouchableOpacity
+                    style={{
+                      padding: 4,
+                      backgroundColor: '#eee',
+                      borderRadius: 6,
+                      marginHorizontal: 2,
+                    }}
+                    onPress={() => carrito.updateItem(item.id, { quantity: item.quantity + 1 })}
+                  >
+                    <Text>+</Text>
+                  </TouchableOpacity>
+                </View>
+                <Text style={[styles.itemPrice, { color: isDark ? '#fff' : '#000' }]}>
+                  $ {item.unit_price} MXN
+                </Text>
+                <View style={styles.buttonsRow}>
+                  <TouchableOpacity
+                    style={[styles.secondaryButton, { borderColor }]}
+                    onPress={() => carrito.removeItem(item.id)}
+                  >
+                    <Text style={{ color: isDark ? '#fff' : '#000' }}>Eliminar del carrito</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
-          </View>
-        ))}
+          ))
+        )}
 
         <View style={[styles.summaryContainer, summaryContainerStyle]}>
           <Text style={[styles.summaryTitle, { color: isDark ? '#fff' : '#000' }]}>

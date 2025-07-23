@@ -1,18 +1,19 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-  
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
+  Alert,
   Image,
-  StyleSheet,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  useWindowDimensions
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
 
 const RegisterScreen: React.FC = () => {
   const router = useRouter();
@@ -24,7 +25,7 @@ const RegisterScreen: React.FC = () => {
     apellidos: '',
     telefono: '',
     email: '',
-    password: ''
+    password: '',
   });
 
   const [errors, setErrors] = useState({
@@ -32,19 +33,19 @@ const RegisterScreen: React.FC = () => {
     apellidos: '',
     telefono: '',
     email: '',
-    password: ''
+    password: '',
   });
 
   const handleChange = (name: string, value: string) => {
     setFormData({
       ...formData,
-      [name]: value
+      [name]: value,
     });
     // Limpiar error cuando el usuario escribe
     if (errors[name as keyof typeof errors]) {
       setErrors({
         ...errors,
-        [name]: ''
+        [name]: '',
       });
     }
   };
@@ -56,7 +57,7 @@ const RegisterScreen: React.FC = () => {
       apellidos: '',
       telefono: '',
       email: '',
-      password: ''
+      password: '',
     };
 
     if (!formData.nombre.trim()) {
@@ -97,10 +98,47 @@ const RegisterScreen: React.FC = () => {
     return isValid;
   };
 
-  const handleRegister = () => {
+  const handleRegister = async () => {
     if (validateForm()) {
-      console.log('Datos del formulario:', formData);
-      router.push('../(tabs)/inicio');
+      try {
+        // Separa los apellidos en paterno y materno
+        const [apellidoPaterno, apellidoMaterno = ''] = formData.apellidos.split(' ');
+        const userPayload = {
+          nombres: formData.nombre,
+          apellidoPaterno,
+          apellidoMaterno,
+          email: formData.email,
+          password: formData.password,
+          telefono: formData.telefono,
+          calle: '',
+          numero: '',
+          colonia: '',
+          ciudad: '',
+          estado: '',
+          codigoPostal: '',
+          referencias: '',
+          wallet: '',
+          role: 'customer',
+        };
+        const response = await fetch('http://192.168.0.108:3000/api/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(userPayload),
+        });
+        const data = await response.json();
+        if (response.ok && data.token) {
+          await AsyncStorage.setItem('token', data.token);
+          Alert.alert('Registro exitoso', data.message || 'Usuario creado correctamente');
+          router.push('/(tabs)/inicio');
+        } else if (response.ok) {
+          Alert.alert('Registro exitoso', data.message || 'Usuario creado correctamente');
+          router.push('/(tabs)/inicio');
+        } else {
+          Alert.alert('Error ' + response.status, data.error || JSON.stringify(data));
+        }
+      } catch (error) {
+        Alert.alert('Error', 'No se pudo conectar con el backend');
+      }
     }
   };
 
@@ -111,23 +149,24 @@ const RegisterScreen: React.FC = () => {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView 
+      <ScrollView
         contentContainerStyle={styles.scrollContainer}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={[
-          styles.contentContainer,
-          isSmallScreen ? styles.columnLayout : styles.rowLayout
-        ]}>
-          <View style={[
-            styles.formContainer,
-            {
-              padding: isSmallScreen ? 24 : 40,
-              maxWidth: isSmallScreen ? '100%' : '50%'
-            }
-          ]}>
+        <View
+          style={[styles.contentContainer, isSmallScreen ? styles.columnLayout : styles.rowLayout]}
+        >
+          <View
+            style={[
+              styles.formContainer,
+              {
+                padding: isSmallScreen ? 24 : 40,
+                maxWidth: isSmallScreen ? '100%' : '50%',
+              },
+            ]}
+          >
             <Image
               source={require('../../assets/images/Logo1.png')}
               style={[
@@ -136,8 +175,8 @@ const RegisterScreen: React.FC = () => {
                   width: isSmallScreen ? '70%' : 300,
                   height: isSmallScreen ? 150 : 300,
                   marginBottom: isSmallScreen ? 20 : 0,
-                  marginTop: isSmallScreen ? 10 : -60
-                }
+                  marginTop: isSmallScreen ? 10 : -60,
+                },
               ]}
               resizeMode="contain"
             />
@@ -148,10 +187,7 @@ const RegisterScreen: React.FC = () => {
             <View style={styles.fieldContainer}>
               <Text style={styles.label}>NOMBRE</Text>
               <TextInput
-                style={[
-                  styles.inputField,
-                  errors.nombre && styles.inputError
-                ]}
+                style={[styles.inputField, errors.nombre && styles.inputError]}
                 placeholder="Ingresa tu nombre"
                 value={formData.nombre}
                 onChangeText={(text) => handleChange('nombre', text)}
@@ -163,25 +199,21 @@ const RegisterScreen: React.FC = () => {
             <View style={styles.fieldContainer}>
               <Text style={styles.label}>APELLIDOS</Text>
               <TextInput
-                style={[
-                  styles.inputField,
-                  errors.apellidos && styles.inputError
-                ]}
+                style={[styles.inputField, errors.apellidos && styles.inputError]}
                 placeholder="Ingresa tus apellidos"
                 value={formData.apellidos}
                 onChangeText={(text) => handleChange('apellidos', text)}
               />
-              {errors.apellidos ? <Text style={styles.errorMessage}>{errors.apellidos}</Text> : null}
+              {errors.apellidos ? (
+                <Text style={styles.errorMessage}>{errors.apellidos}</Text>
+              ) : null}
             </View>
 
             {/* Campo Teléfono */}
             <View style={styles.fieldContainer}>
               <Text style={styles.label}>TELÉFONO</Text>
               <TextInput
-                style={[
-                  styles.inputField,
-                  errors.telefono && styles.inputError
-                ]}
+                style={[styles.inputField, errors.telefono && styles.inputError]}
                 placeholder="Ingresa tu teléfono"
                 value={formData.telefono}
                 onChangeText={(text) => handleChange('telefono', text)}
@@ -194,10 +226,7 @@ const RegisterScreen: React.FC = () => {
             <View style={styles.fieldContainer}>
               <Text style={styles.label}>EMAIL</Text>
               <TextInput
-                style={[
-                  styles.inputField,
-                  errors.email && styles.inputError
-                ]}
+                style={[styles.inputField, errors.email && styles.inputError]}
                 placeholder="Ingresa tu email"
                 value={formData.email}
                 onChangeText={(text) => handleChange('email', text)}
@@ -211,10 +240,7 @@ const RegisterScreen: React.FC = () => {
             <View style={styles.fieldContainer}>
               <Text style={styles.label}>CONTRASEÑA</Text>
               <TextInput
-                style={[
-                  styles.inputField,
-                  errors.password && styles.inputError
-                ]}
+                style={[styles.inputField, errors.password && styles.inputError]}
                 placeholder="Ingresa tu contraseña"
                 value={formData.password}
                 onChangeText={(text) => handleChange('password', text)}
@@ -224,18 +250,12 @@ const RegisterScreen: React.FC = () => {
             </View>
 
             {/* Botón de Registro */}
-            <TouchableOpacity 
-              style={styles.primaryButton} 
-              onPress={handleRegister}
-            >
+            <TouchableOpacity style={styles.primaryButton} onPress={handleRegister}>
               <Text style={styles.buttonText}>SIGUIENTE</Text>
             </TouchableOpacity>
 
             {/* Enlace a Login */}
-            <TouchableOpacity 
-              style={styles.linkContainer} 
-              onPress={handleLoginRedirect}
-            >
+            <TouchableOpacity style={styles.linkContainer} onPress={handleLoginRedirect}>
               <Text style={styles.linkText}>
                 ¿YA TIENES CUENTA? <Text style={styles.boldLinkText}>INICIA SESIÓN</Text>
               </Text>

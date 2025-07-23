@@ -68,8 +68,8 @@ const HomeScreen = () => {
     router.push({ pathname: '../productos', params: { id } });
   };
 
-  // Ajuste responsivo para las tarjetas de productos destacados
-  const featuredCardStyle = {
+  // Ajuste responsivo para todas las tarjetas
+  const productCardStyle = {
     width: screenWidth < 400 ? screenWidth * 0.9 : screenWidth * 0.45,
     marginRight: 15,
     backgroundColor: '#111',
@@ -78,58 +78,60 @@ const HomeScreen = () => {
     alignItems: 'center' as const,
     marginBottom: 15,
   };
-  const featuredImageStyle = {
-    width: featuredCardStyle.width * 0.85,
-    height: featuredCardStyle.width * 0.85,
+  const productImageStyle = {
+    width: productCardStyle.width * 0.85,
+    height: productCardStyle.width * 0.85,
     marginBottom: -40,
   };
 
-  const navigateToProductDetail = (product) => {
+  interface Product {
+    id: string;
+    name: string;
+    price: string;
+    season?: string;
+    image: any;
+  }
+
+  const navigateToProductDetail = (product: Product) => {
     router.push({
-      pathname: '/(tabs)/producto-detalle',
+      pathname: '/producto/producto-detalle',
       params: {
         id: product.id,
         name: product.name,
         price: product.price,
-        image: product.image,
+        image: product.image && typeof product.image === 'number' ? product.image : undefined,
       },
     });
   };
 
-  // Estilos responsivos para las cards
-  const productCardStyle = {
-    width: screenWidth * 0.7 > 430 ? 430 : screenWidth * 0.7,
-    marginRight: 15,
-    backgroundColor: '#111',
-    borderRadius: 10,
-    padding: 12,
-    alignItems: 'center' as const,
-  };
-  const productImageStyle = {
-    width: screenWidth * 0.62 > 380 ? 380 : screenWidth * 0.62,
-    height: screenWidth * 0.62 > 380 ? 380 : screenWidth * 0.62,
-    marginBottom: -52,
-  };
-
   return (
     <View style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}>
-      {/* Barra superior con logo, búsqueda e iconos */}
-      <View style={styles.header}>
-        {/* Logo de la empresa */}
+      {/* Header transparente superpuesto */}
+      <View
+        style={[
+          styles.header,
+          {
+            backgroundColor: 'transparent',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            zIndex: 2,
+          },
+        ]}
+      >
         <Image source={require('../../assets/images/Logo.png')} style={styles.companyLogo} />
-
-        {/* Barra de búsqueda */}
-        <View style={styles.searchContainer}>
+        <View style={[styles.searchContainer, { justifyContent: 'center', alignItems: 'center' }]}>
           <TextInput
-            style={styles.searchBar}
+            style={[
+              styles.searchBar,
+              { width: screenWidth < 500 ? '80%' : 350, alignSelf: 'center' },
+            ]}
             placeholder="Buscar productos..."
             placeholderTextColor="#999"
           />
         </View>
-
-        {/* Iconos */}
       </View>
-
       {/* Contenido principal */}
       <ScrollView style={styles.content}>
         {/* Banner principal */}
@@ -148,7 +150,10 @@ const HomeScreen = () => {
           horizontal
           data={products}
           renderItem={({ item }) => (
-            <TouchableOpacity style={productCardStyle} onPress={() => navigateToProduct(item.id)}>
+            <TouchableOpacity
+              style={productCardStyle}
+              onPress={() => navigateToProductDetail(item)}
+            >
               <Image source={item.image} style={productImageStyle} resizeMode="contain" />
               <Text style={styles.productName}>{item.name}</Text>
               <Text style={styles.productPrice}>{item.price}</Text>
@@ -181,10 +186,10 @@ const HomeScreen = () => {
           {featuredProducts.map((product) => (
             <TouchableOpacity
               key={product.id}
-              style={featuredCardStyle}
+              style={productCardStyle}
               onPress={() => navigateToProductDetail(product)}
             >
-              <Image source={product.image} style={featuredImageStyle} resizeMode="contain" />
+              <Image source={product.image} style={productImageStyle} resizeMode="contain" />
               <Text style={styles.featuredName}>{product.name}</Text>
               <Text style={styles.featuredPrice}>{product.price}</Text>
             </TouchableOpacity>

@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import {
@@ -28,9 +29,14 @@ export default function PagoScreen() {
   const handleMercadoPago = async () => {
     setLoading(true);
     try {
-      const response = await fetch('http://TU_IP_LOCAL:3000/api/payments/create', {
+      // Obtiene el token JWT guardado después de login
+      const token = await AsyncStorage.getItem('token');
+      const response = await fetch('http://192.168.0.108:3000/api/payments/create', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({
           items: cartItems,
           orderId: params.productoId || 'carrito',

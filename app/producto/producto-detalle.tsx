@@ -9,14 +9,21 @@ import {
   useColorScheme,
   View,
 } from 'react-native';
+import { useCarrito } from '../context/CarritoContext';
 
 export default function ProductoDetalleScreen() {
-  const params = useLocalSearchParams();
+  const params = useLocalSearchParams() as {
+    id: string;
+    name: string;
+    price: string;
+    image?: string;
+  };
   const router = useRouter();
   const scheme = useColorScheme();
   const isDark = scheme === 'dark';
   const [cantidad, setCantidad] = useState(1);
   const [talla, setTalla] = useState('M');
+  const carrito = useCarrito();
 
   return (
     <View style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}>
@@ -60,12 +67,46 @@ export default function ProductoDetalleScreen() {
         </TouchableOpacity>
       </View>
       <View style={styles.buttonsRow}>
-        <TouchableOpacity style={[styles.button, { backgroundColor: isDark ? '#fff' : '#000' }]}>
+        <TouchableOpacity
+          style={[styles.button, { backgroundColor: isDark ? '#fff' : '#000' }]}
+          onPress={() => {
+            carrito.addItem({
+              id: params.id,
+              title: params.name,
+              quantity: cantidad,
+              unit_price: Number(String(params.price).replace(/[^\d.]/g, '')),
+              talla: talla,
+              image:
+                params.image && typeof params.image === 'number'
+                  ? params.image
+                  : require('../../assets/images/shirt1.png'),
+            });
+            router.back();
+          }}
+        >
           <Text style={[styles.buttonText, { color: isDark ? '#000' : '#fff' }]}>
             Agregar al carrito
           </Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.button, { backgroundColor: '#009ee3' }]}>
+        <TouchableOpacity
+          style={[styles.button, { backgroundColor: '#009ee3' }]}
+          onPress={() => {
+            router.push({
+              pathname: '/pago/pago' as any,
+              params: {
+                cartItems: JSON.stringify([
+                  {
+                    title: params.name,
+                    quantity: cantidad,
+                    unit_price: Number(String(params.price).replace(/[^\d.]/g, '')),
+                    talla: talla,
+                  },
+                ]),
+                productoId: params.id,
+              },
+            });
+          }}
+        >
           <Text style={styles.buttonText}>Comprar</Text>
         </TouchableOpacity>
       </View>

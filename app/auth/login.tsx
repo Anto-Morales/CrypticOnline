@@ -1,6 +1,8 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
+  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -63,10 +65,25 @@ const LoginScreen: React.FC = () => {
     return valid;
   };
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (validateForm()) {
-      console.log('Credenciales válidas, redirigiendo a /home');
-      router.push('/(tabs)/inicio');
+      try {
+        const response = await fetch('http://192.168.0.108:3000/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        });
+        const data = await response.json();
+        if (response.ok && data.token) {
+          await AsyncStorage.setItem('token', data.token);
+          Alert.alert('Login exitoso', 'Bienvenido');
+          router.push('/(tabs)/inicio');
+        } else {
+          Alert.alert('Error ' + response.status, data.error || JSON.stringify(data));
+        }
+      } catch (error) {
+        Alert.alert('Error', 'No se pudo conectar con el backend');
+      }
     }
   };
 
