@@ -1,4 +1,12 @@
-import { View, Text, StyleSheet, FlatList } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  SafeAreaView,
+  Dimensions,
+  useColorScheme,
+} from 'react-native';
 
 const datosEjemplo = [
   { id: '1', mensaje: 'Tu pedido #123 fue enviado.' },
@@ -7,50 +15,63 @@ const datosEjemplo = [
 ];
 
 export default function NotificacionesScreen() {
+  const screenWidth = Dimensions.get('window').width;
+  const scheme = useColorScheme();
+  const isDark = scheme === 'dark';
+  const cardBg = isDark ? '#222' : '#f5f5f5';
+  const borderColor = isDark ? '#fff' : '#000';
   return (
-    <View style={styles.container}>
-      <Text style={styles.titulo}>Notificaciones</Text>
+    <SafeAreaView
+      style={[styles.container, { paddingTop: 24, backgroundColor: isDark ? '#000' : '#fff' }]}
+    >
+      <Text style={[styles.titulo, { color: isDark ? '#fff' : '#000' }]}>Notificaciones</Text>
       <FlatList
         data={datosEjemplo}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
-          <View style={styles.card}>
-            <Text>{item.mensaje}</Text>
+          <View
+            style={[
+              styles.card,
+              {
+                width: screenWidth < 400 ? '100%' : 360,
+                alignSelf: 'center',
+                backgroundColor: cardBg,
+                borderColor: borderColor,
+              },
+            ]}
+          >
+            <Text style={[styles.mensaje, { color: isDark ? '#fff' : '#333' }]}>
+              {item.mensaje}
+            </Text>
           </View>
         )}
       />
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff', // mismo fondo blanco
     padding: 20,
   },
   titulo: {
     fontSize: 22,
     fontWeight: 'bold',
     marginBottom: 16,
-    color: '#000', // negro para título
   },
   card: {
     padding: 16,
-    backgroundColor: '#f5f5f5', // color similar al rightContainer del carrito
     borderRadius: 10,
     marginBottom: 15,
     borderWidth: 1,
-    borderColor: '#000', // bordes negros como en el carrito
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 3,
-    elevation: 2, // sombra para Android
+    elevation: 2,
   },
   mensaje: {
     fontSize: 16,
-    color: '#333',
   },
 });
-

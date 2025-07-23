@@ -5,30 +5,32 @@ export const createOrder = async (req, res) => {
   try {
     const { userId, items, paymentMethod } = req.body;
 
-    // items: [{ productId, quantity }]
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'Debe enviar productos para el pedido.' });
+    }
 
+    // Validar y calcular total
     let total = 0;
     const orderItemsData = [];
 
     for (const item of items) {
       const product = await prisma.product.findUnique({
         where: { id: item.productId },
-        include: {
-          discounts: true,
-        },
+        include: { discounts: true },
       });
 
       if (!product) {
         return res.status(404).json({ error: `Producto ${item.productId} no encontrado` });
       }
 
-      let finalPrice = product.price;
+      if (product.stock < item.quantity) {
+        return res.status(400).json({ error: `Stock insuficiente para ${product.name}` });
+      }
 
-      // Si tiene un descuento activo
+      // Aplicar descuento si hay
       const now = new Date();
-      const activeDiscount = product.discounts.find(
-        (d) => new Date(d.startDate) <= now && now <= new Date(d.endDate)
-      );
+      const activeDiscount = product.discounts.find((d) => now >= d.startDate && now <= d.endDate);
+      let finalPrice = product.price;
 
       if (activeDiscount) {
         finalPrice = finalPrice * (1 - activeDiscount.percentage / 100);
@@ -43,19 +45,35 @@ export const createOrder = async (req, res) => {
       });
     }
 
-    const newOrder = await prisma.order.create({
-      data: {
-        userId,
-        status: 'PENDING',
-        total,
-        paymentMethod,
-        orderItems: {
-          create: orderItemsData,
+    // Crear orden y decrementar stock en la misma transacción
+    const newOrder = await prisma.$transaction(async (tx) => {
+      // Crear orden
+      const order = await tx.order.create({
+        data: {
+          userId,
+          status: 'PENDING',
+          total,
+          paymentMethod,
+          orderItems: {
+            create: orderItemsData,
+          },
         },
-      },
-      include: {
-        orderItems: true,
-      },
+        include: {
+          orderItems: true,
+        },
+      });
+
+      // Actualizar stock productos
+      for (const item of items) {
+        await tx.product.update({
+          where: { id: item.productId },
+          data: {
+            stock: { decrement: item.quantity },
+          },
+        });
+      }
+
+      return order;
     });
 
     res.status(201).json(newOrder);
@@ -126,9 +144,19 @@ export const updateOrderStatus = async (req, res) => {
       return res.status(403).json({ error: 'No autorizado o pedido no encontrado' });
     }
 
+    const dataToUpdate = { status };
+    if (txHash) dataToUpdate.txHash = txHash;
+
+    if (status === 'CANCELLED') {
+      dataToUpdate.cancelledAt = new Date();
+    }
+    if (status === 'REFUNDED') {
+      dataToUpdate.refundedAt = new Date();
+    }
+
     const updated = await prisma.order.update({
       where: { id: parseInt(id) },
-      data: { status, txHash },
+      data: dataToUpdate,
     });
 
     res.status(200).json({ message: 'Pedido actualizado', order: updated });

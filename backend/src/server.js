@@ -5,12 +5,16 @@ import productRoutes from './routes/product.routes.js';
 import userRoutes from './routes/user.routes.js';
 import authRoutes from './routes/auth.routes.js';
 import orderRoutes from './routes/order.routes.js';
+import paymentRoutes from './routes/payment.routes.js';
 
 dotenv.config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// IMPORTANTE: esto debe ir _antes_ de cualquier middleware de 404
+app.use('/api/payments', paymentRoutes);
 
 app.use('/api/orders', orderRoutes);
 
