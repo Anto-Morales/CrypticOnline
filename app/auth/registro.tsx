@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  
   View,
   Text,
   TextInput,
@@ -10,7 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  useWindowDimensions
+  useWindowDimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 
@@ -24,7 +23,7 @@ const RegisterScreen: React.FC = () => {
     apellidos: '',
     telefono: '',
     email: '',
-    password: ''
+    password: '',
   });
 
   const [errors, setErrors] = useState({
@@ -32,19 +31,19 @@ const RegisterScreen: React.FC = () => {
     apellidos: '',
     telefono: '',
     email: '',
-    password: ''
+    password: '',
   });
 
   const handleChange = (name: string, value: string) => {
     setFormData({
       ...formData,
-      [name]: value
+      [name]: value,
     });
     // Limpiar error cuando el usuario escribe
     if (errors[name as keyof typeof errors]) {
       setErrors({
         ...errors,
-        [name]: ''
+        [name]: '',
       });
     }
   };
@@ -56,7 +55,7 @@ const RegisterScreen: React.FC = () => {
       apellidos: '',
       telefono: '',
       email: '',
-      password: ''
+      password: '',
     };
 
     if (!formData.nombre.trim()) {
@@ -100,34 +99,35 @@ const RegisterScreen: React.FC = () => {
   const handleRegister = () => {
     if (validateForm()) {
       console.log('Datos del formulario:', formData);
-      router.push('/(tabs)/Nvpassword');
+      router.push('../(tabs)/inicio');
     }
   };
 
   const handleLoginRedirect = () => {
-    router.push('/(tabs)');
+    router.push('/');
   };
 
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView 
+      <ScrollView
         contentContainerStyle={styles.scrollContainer}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={[
-          styles.contentContainer,
-          isSmallScreen ? styles.columnLayout : styles.rowLayout
-        ]}>
-          <View style={[
-            styles.formContainer,
-            {
-              padding: isSmallScreen ? 24 : 40,
-              maxWidth: isSmallScreen ? '100%' : '50%'
-            }
-          ]}>
+        <View
+          style={[styles.contentContainer, isSmallScreen ? styles.columnLayout : styles.rowLayout]}
+        >
+          <View
+            style={[
+              styles.formContainer,
+              {
+                padding: isSmallScreen ? 24 : 40,
+                maxWidth: isSmallScreen ? '100%' : '50%',
+              },
+            ]}
+          >
             <Image
               source={require('../../assets/images/Logo1.png')}
               style={[
@@ -136,8 +136,8 @@ const RegisterScreen: React.FC = () => {
                   width: isSmallScreen ? '70%' : 300,
                   height: isSmallScreen ? 150 : 300,
                   marginBottom: isSmallScreen ? 20 : 0,
-                  marginTop: isSmallScreen ? 10 : -60
-                }
+                  marginTop: isSmallScreen ? 10 : -60,
+                },
               ]}
               resizeMode="contain"
             />
@@ -148,13 +148,10 @@ const RegisterScreen: React.FC = () => {
             <View style={styles.fieldContainer}>
               <Text style={styles.label}>NOMBRE</Text>
               <TextInput
-                style={[
-                  styles.inputField,
-                  errors.nombre && styles.inputError
-                ]}
+                style={[styles.inputField, errors.nombre && styles.inputError]}
                 placeholder="Ingresa tu nombre"
                 value={formData.nombre}
-                onChangeText={(text) => handleChange('nombre', text)}
+                onChangeText={(text: string) => handleChange('nombre', text)}
               />
               {errors.nombre ? <Text style={styles.errorMessage}>{errors.nombre}</Text> : null}
             </View>
@@ -163,28 +160,24 @@ const RegisterScreen: React.FC = () => {
             <View style={styles.fieldContainer}>
               <Text style={styles.label}>APELLIDOS</Text>
               <TextInput
-                style={[
-                  styles.inputField,
-                  errors.apellidos && styles.inputError
-                ]}
+                style={[styles.inputField, errors.apellidos && styles.inputError]}
                 placeholder="Ingresa tus apellidos"
                 value={formData.apellidos}
-                onChangeText={(text) => handleChange('apellidos', text)}
+                onChangeText={(text: string) => handleChange('apellidos', text)}
               />
-              {errors.apellidos ? <Text style={styles.errorMessage}>{errors.apellidos}</Text> : null}
+              {errors.apellidos ? (
+                <Text style={styles.errorMessage}>{errors.apellidos}</Text>
+              ) : null}
             </View>
 
             {/* Campo Teléfono */}
             <View style={styles.fieldContainer}>
               <Text style={styles.label}>TELÉFONO</Text>
               <TextInput
-                style={[
-                  styles.inputField,
-                  errors.telefono && styles.inputError
-                ]}
+                style={[styles.inputField, errors.telefono && styles.inputError]}
                 placeholder="Ingresa tu teléfono"
                 value={formData.telefono}
-                onChangeText={(text) => handleChange('telefono', text)}
+                onChangeText={(text: string) => handleChange('telefono', text)}
                 keyboardType="phone-pad"
               />
               {errors.telefono ? <Text style={styles.errorMessage}>{errors.telefono}</Text> : null}
@@ -194,13 +187,10 @@ const RegisterScreen: React.FC = () => {
             <View style={styles.fieldContainer}>
               <Text style={styles.label}>EMAIL</Text>
               <TextInput
-                style={[
-                  styles.inputField,
-                  errors.email && styles.inputError
-                ]}
+                style={[styles.inputField, errors.email && styles.inputError]}
                 placeholder="Ingresa tu email"
                 value={formData.email}
-                onChangeText={(text) => handleChange('email', text)}
+                onChangeText={(text: string) => handleChange('email', text)}
                 keyboardType="email-address"
                 autoCapitalize="none"
               />
@@ -211,31 +201,22 @@ const RegisterScreen: React.FC = () => {
             <View style={styles.fieldContainer}>
               <Text style={styles.label}>CONTRASEÑA</Text>
               <TextInput
-                style={[
-                  styles.inputField,
-                  errors.password && styles.inputError
-                ]}
+                style={[styles.inputField, errors.password && styles.inputError]}
                 placeholder="Ingresa tu contraseña"
                 value={formData.password}
-                onChangeText={(text) => handleChange('password', text)}
+                onChangeText={(text: string) => handleChange('password', text)}
                 secureTextEntry
               />
               {errors.password ? <Text style={styles.errorMessage}>{errors.password}</Text> : null}
             </View>
 
             {/* Botón de Registro */}
-            <TouchableOpacity 
-              style={styles.primaryButton} 
-              onPress={handleRegister}
-            >
+            <TouchableOpacity style={styles.primaryButton} onPress={handleRegister}>
               <Text style={styles.buttonText}>SIGUIENTE</Text>
             </TouchableOpacity>
 
             {/* Enlace a Login */}
-            <TouchableOpacity 
-              style={styles.linkContainer} 
-              onPress={handleLoginRedirect}
-            >
+            <TouchableOpacity style={styles.linkContainer} onPress={handleLoginRedirect}>
               <Text style={styles.linkText}>
                 ¿YA TIENES CUENTA? <Text style={styles.boldLinkText}>INICIA SESIÓN</Text>
               </Text>

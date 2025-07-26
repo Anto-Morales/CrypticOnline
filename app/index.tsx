@@ -1,16 +1,16 @@
 import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  TextInput, 
-  TouchableOpacity, 
-  Image, 
-  StyleSheet, 
-  KeyboardAvoidingView, 
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  Image,
+  StyleSheet,
+  KeyboardAvoidingView,
   Platform,
   ScrollView,
   useWindowDimensions,
-  Dimensions
+  useColorScheme,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 
@@ -19,24 +19,29 @@ const LoginScreen: React.FC = () => {
   const { width, height } = useWindowDimensions();
   const isSmallScreen = width < 768;
 
-  const [email, setEmail] = useState<string>('');
-  const [password, setPassword] = useState<string>('');
-  const [errors, setErrors] = useState({
-    email: '',
-    password: ''
-  });
+  const systemScheme = useColorScheme();
+  const isDarkMode = systemScheme !== 'dark'; // 👈 Invertido
 
-  const validateEmail = (email: string): boolean => {
-    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return re.test(email);
+  const themeColors = {
+    background: isDarkMode ? '#000' : '#fff',
+    text: isDarkMode ? '#fff' : '#000',
+    inputBackground: isDarkMode ? '#222' : '#fff',
+    border: isDarkMode ? '#555' : '#000',
+    error: '#ff4d4d',
+    buttonBackground: isDarkMode ? '#fff' : '#000',
+    buttonText: isDarkMode ? '#000' : '#fff',
+    linkText: isDarkMode ? '#ccc' : '#000',
   };
 
-  const validateForm = (): boolean => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [errors, setErrors] = useState({ email: '', password: '' });
+
+  const validateEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+  const validateForm = () => {
     let valid = true;
-    const newErrors = {
-      email: '',
-      password: ''
-    };
+    const newErrors = { email: '', password: '' };
 
     if (!email) {
       newErrors.email = 'El email es requerido';
@@ -61,142 +66,161 @@ const LoginScreen: React.FC = () => {
   const handleLogin = () => {
     if (validateForm()) {
       console.log('Credenciales válidas, redirigiendo a /home');
-      router.push('/home');
+      router.push('/(tabs)/inicio');
     }
   };
 
-  const handleForgotPassword = () => {
-    router.push('/Nvpassword');
-  };
-
-  const handleRegister = () => {
-    router.push('/registro');
-  };
+  const handleForgotPassword = () => router.push('../auth/Nvpassword');
+  const handleRegister = () => router.push('../auth/registro');
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container} 
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    <KeyboardAvoidingView
+      style={[styles.container, { backgroundColor: themeColors.background }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView contentContainerStyle={styles.scrollContainer}>
-        <View style={[
-          styles.mainContainer, 
-          isSmallScreen ? styles.columnLayout : styles.rowLayout
-        ]}>
-          <View style={[
-            styles.leftContainer,
-            { 
-              width: isSmallScreen ? '100%' : '50%',
-              padding: isSmallScreen ? 40 : 60
-            }
-          ]}>
-            <Image 
-              source={require('../../assets/images/Logo1.png')} 
+        <View
+          style={[styles.mainContainer, isSmallScreen ? styles.columnLayout : styles.rowLayout]}
+        >
+          <View
+            style={[
+              styles.leftContainer,
+              {
+                width: isSmallScreen ? '100%' : '50%',
+                padding: isSmallScreen ? 40 : 60,
+              },
+            ]}
+          >
+            <Image
+              source={require('../assets/images/Logo1.png')}
               style={[
                 styles.logo,
                 {
                   width: isSmallScreen ? '80%' : 400,
                   height: isSmallScreen ? 200 : 350,
                   marginBottom: isSmallScreen ? 20 : -80,
-                  marginTop: isSmallScreen ? 20 : -70
-                }
+                  marginTop: isSmallScreen ? 20 : -70,
+                },
               ]}
               resizeMode="contain"
             />
 
-            <Text style={styles.title}>INICIO DE SESIÓN</Text>
+            <Text style={[styles.title, { color: themeColors.text }]}>INICIO DE SESIÓN</Text>
 
             <View style={styles.inputContainer}>
               <TextInput
                 style={[
                   styles.input,
-                  errors.email && styles.inputError,
                   {
+                    backgroundColor: themeColors.inputBackground,
+                    color: themeColors.text,
+                    borderColor: errors.email ? themeColors.error : themeColors.border,
                     width: isSmallScreen ? '100%' : 350,
                     height: isSmallScreen ? 50 : 60,
-                    borderRadius: isSmallScreen ? 25 : 30
-                  }
+                    borderRadius: isSmallScreen ? 25 : 30,
+                  },
                 ]}
                 placeholder="EMAIL"
+                placeholderTextColor={isDarkMode ? '#888' : '#aaa'}
                 value={email}
                 onChangeText={(text) => {
                   setEmail(text);
-                  if (errors.email) setErrors({...errors, email: ''});
+                  if (errors.email) setErrors({ ...errors, email: '' });
                 }}
                 keyboardType="email-address"
                 autoCapitalize="none"
               />
-              {errors.email ? <Text style={styles.errorText}>{errors.email}</Text> : null}
+              {errors.email && (
+                <Text style={[styles.errorText, { color: themeColors.error }]}>{errors.email}</Text>
+              )}
             </View>
 
             <View style={styles.inputContainer}>
               <TextInput
                 style={[
                   styles.input,
-                  errors.password && styles.inputError,
                   {
+                    backgroundColor: themeColors.inputBackground,
+                    color: themeColors.text,
+                    borderColor: errors.password ? themeColors.error : themeColors.border,
                     width: isSmallScreen ? '100%' : 350,
                     height: isSmallScreen ? 50 : 60,
-                    borderRadius: isSmallScreen ? 25 : 30
-                  }
+                    borderRadius: isSmallScreen ? 25 : 30,
+                  },
                 ]}
                 placeholder="CONTRASEÑA"
+                placeholderTextColor={isDarkMode ? '#888' : '#aaa'}
                 value={password}
                 onChangeText={(text) => {
                   setPassword(text);
-                  if (errors.password) setErrors({...errors, password: ''});
+                  if (errors.password) setErrors({ ...errors, password: '' });
                 }}
                 secureTextEntry
               />
-              {errors.password ? <Text style={styles.errorText}>{errors.password}</Text> : null}
+              {errors.password && (
+                <Text style={[styles.errorText, { color: themeColors.error }]}>
+                  {errors.password}
+                </Text>
+              )}
             </View>
 
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[
                 styles.button,
                 {
                   width: isSmallScreen ? '100%' : 350,
                   borderRadius: isSmallScreen ? 25 : 50,
-                  paddingVertical: isSmallScreen ? 12 : 15
-                }
-              ]} 
+                  paddingVertical: isSmallScreen ? 12 : 15,
+                  backgroundColor: themeColors.buttonBackground,
+                },
+              ]}
               onPress={handleLogin}
               testID="login-button"
             >
-              <Text style={styles.buttonText}>INICIAR SESIÓN</Text>
+              <Text style={[styles.buttonText, { color: themeColors.buttonText }]}>
+                INICIAR SESIÓN
+              </Text>
             </TouchableOpacity>
 
             <View style={styles.linkContainer}>
               <TouchableOpacity onPress={handleForgotPassword}>
-                <Text style={[
-                  styles.linkText,
-                  { fontSize: isSmallScreen ? 16 : 19 }
-                ]}>¿Olvidaste tu contraseña?</Text>
+                <Text
+                  style={[
+                    styles.linkText,
+                    { fontSize: isSmallScreen ? 16 : 19, color: themeColors.linkText },
+                  ]}
+                >
+                  ¿Olvidaste tu contraseña?
+                </Text>
               </TouchableOpacity>
             </View>
 
             <View style={styles.linkContainer}>
               <TouchableOpacity onPress={handleRegister}>
-                <Text style={[
-                  styles.linkText,
-                  { fontSize: isSmallScreen ? 16 : 19 }
-                ]}>¿No tienes cuenta? <Text style={styles.boldText}>REGÍSTRATE</Text></Text>
+                <Text
+                  style={[
+                    styles.linkText,
+                    { fontSize: isSmallScreen ? 16 : 19, color: themeColors.linkText },
+                  ]}
+                >
+                  ¿No tienes cuenta? <Text style={styles.boldText}>REGÍSTRATE</Text>
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
 
           {!isSmallScreen && (
-            <View style={styles.rightContainer}>
-              <Image 
-                source={require('../../assets/images/modeloo.png')}
+            <View style={[styles.rightContainer, { backgroundColor: themeColors.background }]}>
+              <Image
+                source={require('../assets/images/modeloo.png')}
                 style={[
                   styles.modelImage,
                   {
                     width: width * 0.5,
                     height: height * 0.8,
                     maxWidth: 850,
-                    maxHeight: 650
-                  }
+                    maxHeight: 650,
+                  },
                 ]}
                 resizeMode="contain"
               />
@@ -233,7 +257,6 @@ const styles = StyleSheet.create({
   rightContainer: {
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
   },
   logo: {
     alignSelf: 'center',
@@ -251,33 +274,25 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   input: {
-    borderColor: '#000',
     borderWidth: 1,
     paddingHorizontal: 15,
     alignSelf: 'center',
   },
-  inputError: {
-    borderColor: 'red',
-  },
   errorText: {
-    color: 'red',
     fontSize: 12,
     marginTop: 5,
     marginLeft: 15,
     alignSelf: 'flex-start',
   },
   button: {
-    backgroundColor: '#000',
     alignItems: 'center',
     marginBottom: 15,
     alignSelf: 'center',
   },
   buttonText: {
-    color: '#fff',
     fontWeight: 'bold',
   },
   linkText: {
-    color: '#000',
     textAlign: 'center',
   },
   linkContainer: {

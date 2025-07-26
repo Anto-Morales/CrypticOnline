@@ -9,16 +9,15 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Dimensions,
-  useWindowDimensions
+  useWindowDimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 
 const NewPasswordScreen: React.FC = () => {
   const router = useRouter();
-  const [newPassword, setNewPassword] = useState<string>('');
-  const [confirmPassword, setConfirmPassword] = useState<string>('');
-  const { width, height } = useWindowDimensions();
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const { width } = useWindowDimensions();
   const isSmallScreen = width < 768;
 
   const handleResetPassword = () => {
@@ -32,7 +31,7 @@ const NewPasswordScreen: React.FC = () => {
     }
 
     console.log('Nueva contraseña:', newPassword);
-    router.push('/(tabs)');
+    router.push('../auth/login');
   };
 
   const handleGoBack = () => {
@@ -45,14 +44,11 @@ const NewPasswordScreen: React.FC = () => {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView contentContainerStyle={styles.scrollContainer}>
-        <View style={[
-          styles.mainContainer, 
-          isSmallScreen ? styles.columnLayout : styles.rowLayout
-        ]}>
-          <View style={[
-            styles.leftContainer,
-            { width: isSmallScreen ? '100%' : '50%' }
-          ]}>
+        <View
+          style={[styles.mainContainer, isSmallScreen ? styles.columnLayout : styles.rowLayout]}
+        >
+          {/* LADO IZQUIERDO */}
+          <View style={[styles.leftContainer, { width: isSmallScreen ? '100%' : '50%' }]}>
             <TouchableOpacity onPress={handleGoBack} style={styles.backButtonContainer}>
               <Text style={styles.backButton}>←</Text>
             </TouchableOpacity>
@@ -67,7 +63,8 @@ const NewPasswordScreen: React.FC = () => {
 
             <Text style={styles.title}>AGREGA UNA DIRECCIÓN</Text>
             <Text style={styles.description}>
-              Ingresa una nueva contraseña segura. Asegúrate de que sea fácil de recordar pero difícil de adivinar. Tu nueva contraseña debe tener al menos 8 caracteres.
+              Ingresa una nueva contraseña segura. Asegúrate de que sea fácil de recordar pero
+              difícil de adivinar. Tu nueva contraseña debe tener al menos 8 caracteres.
             </Text>
 
             <TextInput
@@ -91,6 +88,7 @@ const NewPasswordScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
 
+          {/* LADO DERECHO */}
           {!isSmallScreen && (
             <View style={styles.rightContainer}>
               <Image
@@ -98,13 +96,11 @@ const NewPasswordScreen: React.FC = () => {
                 style={styles.modelImage}
                 resizeMode="contain"
               />
-              {!isSmallScreen && (
-                <Image
-                  source={require('../../assets/images/Logo1.png')}
-                  style={styles.logoRight}
-                  resizeMode="contain"
-                />
-              )}
+              <Image
+                source={require('../../assets/images/Logo1.png')}
+                style={styles.logoRight}
+                resizeMode="contain"
+              />
             </View>
           )}
         </View>
@@ -116,31 +112,21 @@ const NewPasswordScreen: React.FC = () => {
 export default NewPasswordScreen;
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1,
-  },
-  scrollContainer: {
-    flexGrow: 1,
-  },
-  mainContainer: {
-    flex: 1,
-  },
-  rowLayout: {
-    flexDirection: 'row',
-  },
-  columnLayout: {
-    flexDirection: 'column',
-  },
-  leftContainer: { 
+  container: { flex: 1 },
+  scrollContainer: { flexGrow: 1 },
+  mainContainer: { flex: 1 },
+  rowLayout: { flexDirection: 'row' },
+  columnLayout: { flexDirection: 'column' },
+  leftContainer: {
     paddingHorizontal: 20,
     paddingVertical: 40,
     justifyContent: 'center',
     maxWidth: 600,
     alignSelf: 'center',
   },
-  rightContainer: { 
-    flex: 1, 
-    justifyContent: 'center', 
+  rightContainer: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#f5f5f5',
   },
@@ -148,7 +134,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     marginBottom: 20,
   },
-  backButton: { 
+  backButton: {
     fontSize: 28,
   },
   logo: {
@@ -170,9 +156,9 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     textAlign: 'center',
   },
-  description: { 
-    marginBottom: 30, 
-    fontSize: 16, 
+  description: {
+    marginBottom: 30,
+    fontSize: 16,
     color: '#333',
     textAlign: 'center',
   },
@@ -197,12 +183,12 @@ const styles = StyleSheet.create({
     maxWidth: 400,
     alignSelf: 'center',
   },
-  buttonText: { 
+  buttonText: {
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 16,
   },
-  modelImage: { 
+  modelImage: {
     width: '80%',
     height: '80%',
     maxHeight: 600,

@@ -9,7 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Dimensions,
-  ScrollView
+  ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 
@@ -21,17 +21,17 @@ const NvpasswordScreen: React.FC = () => {
 
   const handleSendEmail = () => {
     console.log(`Recovery email sent to: ${email}`);
-    router.push('/(tabs)/verificacion');
+    router.push('../auth/verificacion');
   };
 
   const handleGoBack = () => {
-    router.push('/(tabs)');
+    router.push('../(tabs)');
   };
 
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <View style={[styles.mainContainer, isSmallScreen && styles.smallScreenContainer]}>
@@ -47,10 +47,12 @@ const NvpasswordScreen: React.FC = () => {
               resizeMode="contain"
             />
 
-            <Text style={[styles.title, isSmallScreen && styles.smallTitle]}>¿OLVIDASTE TU CONTRASEÑA?</Text>
+            <Text style={[styles.title, isSmallScreen && styles.smallTitle]}>
+              ¿OLVIDASTE TU CONTRASEÑA?
+            </Text>
             <Text style={[styles.description, isSmallScreen && styles.smallDescription]}>
-              No te preocupes. Ingresa el correo electrónico asociado a tu cuenta y te
-              enviaremos un enlace para que puedas restablecer tu contraseña de forma segura.
+              No te preocupes. Ingresa el correo electrónico asociado a tu cuenta y te enviaremos un
+              enlace para que puedas restablecer tu contraseña de forma segura.
             </Text>
 
             <TextInput
@@ -62,8 +64,11 @@ const NvpasswordScreen: React.FC = () => {
               autoCapitalize="none"
             />
 
-            <TouchableOpacity style={[styles.button, isSmallScreen && styles.smallButton]} onPress={handleSendEmail}>
-              <Text style={styles.buttonText}>INICIAR SESIÓN</Text>
+            <TouchableOpacity
+              style={[styles.button, isSmallScreen && styles.smallButton]}
+              onPress={handleSendEmail}
+            >
+              <Text style={styles.buttonText}>Enviar Gmail</Text>
             </TouchableOpacity>
           </View>
 
@@ -86,7 +91,7 @@ const NvpasswordScreen: React.FC = () => {
 export default NvpasswordScreen;
 
 const styles = StyleSheet.create({
-  container: { 
+  container: {
     flex: 1,
   },
   scrollContainer: {
@@ -100,7 +105,7 @@ const styles = StyleSheet.create({
   smallScreenContainer: {
     flexDirection: 'column',
   },
-  leftContainer: { 
+  leftContainer: {
     flex: 1,
     paddingHorizontal: 40,
     paddingVertical: 30,
@@ -114,7 +119,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 20,
   },
-  rightContainer: { 
+  rightContainer: {
     flex: 1,
     backgroundColor: '#f5f5f5',
   },
@@ -122,11 +127,11 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     marginBottom: 20,
   },
-  backButton: { 
+  backButton: {
     fontSize: 28,
     color: '#000',
   },
-  logo: { 
+  logo: {
     width: 300,
     height: 250,
     marginBottom: -40,
@@ -139,7 +144,7 @@ const styles = StyleSheet.create({
     marginBottom: -20,
     marginTop: 0,
   },
-  title: { 
+  title: {
     fontSize: 20,
     fontWeight: 'bold',
     marginBottom: 20,
@@ -150,7 +155,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     marginBottom: 15,
   },
-  description: { 
+  description: {
     marginBottom: 30,
     fontSize: 15,
     color: '#666',
@@ -192,7 +197,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 22,
   },
-  buttonText: { 
+  buttonText: {
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 16,
