@@ -31,6 +31,9 @@ export default function PagoScreen() {
     try {
       // Obtiene el token JWT guardado después de login
       const token = await AsyncStorage.getItem('token');
+      console.log('Token:', token ? 'Existe' : 'No existe');
+      console.log('Items enviados:', cartItems);
+
       const response = await fetch('http://192.168.0.108:3000/api/payments/create', {
         method: 'POST',
         headers: {
@@ -42,13 +45,25 @@ export default function PagoScreen() {
           orderId: params.productoId || 'carrito',
         }),
       });
-      const data = await response.json();
-      if (data.init_point) {
-        Linking.openURL(data.init_point);
+
+      console.log('Response status:', response.status);
+      const text = await response.text();
+      console.log('Response text:', text);
+
+      if (response.ok) {
+        const data = JSON.parse(text);
+        if (data.init_point) {
+          Linking.openURL(data.init_point);
+        } else {
+          console.error('No hay init_point en la respuesta:', data);
+          Alert.alert('Error', 'No se pudo iniciar el pago - Sin init_point');
+        }
       } else {
-        Alert.alert('Error', 'No se pudo iniciar el pago');
+        console.error('Error en la respuesta:', text);
+        Alert.alert('Error', `Error ${response.status}: ${text}`);
       }
     } catch (error) {
+      console.error('Error completo:', error);
       Alert.alert('Error', 'No se pudo conectar con el backend');
     }
     setLoading(false);

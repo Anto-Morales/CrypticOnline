@@ -11,6 +11,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  useColorScheme,
   useWindowDimensions,
   View,
 } from 'react-native';
@@ -19,6 +20,22 @@ const RegisterScreen: React.FC = () => {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isSmallScreen = width < 768;
+
+  const systemScheme = useColorScheme();
+  const isDarkMode = systemScheme === 'dark';
+
+  const themeColors = {
+    background: isDarkMode ? '#000' : '#fff',
+    text: isDarkMode ? '#fff' : '#000',
+    inputBackground: isDarkMode ? '#333' : '#fff',
+    border: isDarkMode ? '#555' : '#ccc',
+    error: '#ff4d4d',
+    buttonBackground: isDarkMode ? '#fff' : '#000',
+    buttonText: isDarkMode ? '#000' : '#fff',
+    labelText: isDarkMode ? '#fff' : '#333',
+    linkText: isDarkMode ? '#ccc' : '#666',
+    placeholderText: isDarkMode ? '#888' : '#aaa',
+  };
 
   const [formData, setFormData] = useState({
     nombre: '',
@@ -120,7 +137,7 @@ const RegisterScreen: React.FC = () => {
           wallet: '',
           role: 'customer',
         };
-        const response = await fetch('http://192.168.0.108:3000/api/register', {
+        const response = await fetch('http://192.168.0.108:3000/api/user/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(userPayload),
@@ -148,7 +165,7 @@ const RegisterScreen: React.FC = () => {
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: themeColors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView
@@ -181,89 +198,160 @@ const RegisterScreen: React.FC = () => {
               resizeMode="contain"
             />
 
-            <Text style={styles.sectionTitle}>REGISTRO</Text>
+            <Text style={[styles.sectionTitle, { color: themeColors.text }]}>REGISTRO</Text>
 
             {/* Campo Nombre */}
             <View style={styles.fieldContainer}>
-              <Text style={styles.label}>NOMBRE</Text>
+              <Text style={[styles.label, { color: themeColors.labelText }]}>NOMBRE</Text>
               <TextInput
-                style={[styles.inputField, errors.nombre && styles.inputError]}
+                style={[
+                  styles.inputField,
+                  {
+                    backgroundColor: themeColors.inputBackground,
+                    color: themeColors.text,
+                    borderColor: errors.nombre ? themeColors.error : themeColors.border,
+                  },
+                  errors.nombre && styles.inputError,
+                ]}
                 placeholder="Ingresa tu nombre"
+                placeholderTextColor={themeColors.placeholderText}
                 value={formData.nombre}
                 onChangeText={(text) => handleChange('nombre', text)}
               />
-              {errors.nombre ? <Text style={styles.errorMessage}>{errors.nombre}</Text> : null}
+              {errors.nombre ? (
+                <Text style={[styles.errorMessage, { color: themeColors.error }]}>
+                  {errors.nombre}
+                </Text>
+              ) : null}
             </View>
 
             {/* Campo Apellidos */}
             <View style={styles.fieldContainer}>
-              <Text style={styles.label}>APELLIDOS</Text>
+              <Text style={[styles.label, { color: themeColors.labelText }]}>APELLIDOS</Text>
               <TextInput
-                style={[styles.inputField, errors.apellidos && styles.inputError]}
+                style={[
+                  styles.inputField,
+                  {
+                    backgroundColor: themeColors.inputBackground,
+                    color: themeColors.text,
+                    borderColor: errors.apellidos ? themeColors.error : themeColors.border,
+                  },
+                  errors.apellidos && styles.inputError,
+                ]}
                 placeholder="Ingresa tus apellidos"
+                placeholderTextColor={themeColors.placeholderText}
                 value={formData.apellidos}
                 onChangeText={(text) => handleChange('apellidos', text)}
               />
               {errors.apellidos ? (
-                <Text style={styles.errorMessage}>{errors.apellidos}</Text>
+                <Text style={[styles.errorMessage, { color: themeColors.error }]}>
+                  {errors.apellidos}
+                </Text>
               ) : null}
             </View>
 
             {/* Campo Teléfono */}
             <View style={styles.fieldContainer}>
-              <Text style={styles.label}>TELÉFONO</Text>
+              <Text style={[styles.label, { color: themeColors.labelText }]}>TELÉFONO</Text>
               <TextInput
-                style={[styles.inputField, errors.telefono && styles.inputError]}
+                style={[
+                  styles.inputField,
+                  {
+                    backgroundColor: themeColors.inputBackground,
+                    color: themeColors.text,
+                    borderColor: errors.telefono ? themeColors.error : themeColors.border,
+                  },
+                  errors.telefono && styles.inputError,
+                ]}
                 placeholder="Ingresa tu teléfono"
+                placeholderTextColor={themeColors.placeholderText}
                 value={formData.telefono}
                 onChangeText={(text) => handleChange('telefono', text)}
                 keyboardType="phone-pad"
               />
-              {errors.telefono ? <Text style={styles.errorMessage}>{errors.telefono}</Text> : null}
+              {errors.telefono ? (
+                <Text style={[styles.errorMessage, { color: themeColors.error }]}>
+                  {errors.telefono}
+                </Text>
+              ) : null}
             </View>
 
             {/* Campo Email */}
             <View style={styles.fieldContainer}>
-              <Text style={styles.label}>EMAIL</Text>
+              <Text style={[styles.label, { color: themeColors.labelText }]}>EMAIL</Text>
               <TextInput
-                style={[styles.inputField, errors.email && styles.inputError]}
+                style={[
+                  styles.inputField,
+                  {
+                    backgroundColor: themeColors.inputBackground,
+                    color: themeColors.text,
+                    borderColor: errors.email ? themeColors.error : themeColors.border,
+                  },
+                  errors.email && styles.inputError,
+                ]}
                 placeholder="Ingresa tu email"
+                placeholderTextColor={themeColors.placeholderText}
                 value={formData.email}
                 onChangeText={(text) => handleChange('email', text)}
                 keyboardType="email-address"
                 autoCapitalize="none"
               />
-              {errors.email ? <Text style={styles.errorMessage}>{errors.email}</Text> : null}
+              {errors.email ? (
+                <Text style={[styles.errorMessage, { color: themeColors.error }]}>
+                  {errors.email}
+                </Text>
+              ) : null}
             </View>
 
             {/* Campo Contraseña */}
             <View style={styles.fieldContainer}>
-              <Text style={styles.label}>CONTRASEÑA</Text>
+              <Text style={[styles.label, { color: themeColors.labelText }]}>CONTRASEÑA</Text>
               <TextInput
-                style={[styles.inputField, errors.password && styles.inputError]}
+                style={[
+                  styles.inputField,
+                  {
+                    backgroundColor: themeColors.inputBackground,
+                    color: themeColors.text,
+                    borderColor: errors.password ? themeColors.error : themeColors.border,
+                  },
+                  errors.password && styles.inputError,
+                ]}
                 placeholder="Ingresa tu contraseña"
+                placeholderTextColor={themeColors.placeholderText}
                 value={formData.password}
                 onChangeText={(text) => handleChange('password', text)}
                 secureTextEntry
               />
-              {errors.password ? <Text style={styles.errorMessage}>{errors.password}</Text> : null}
+              {errors.password ? (
+                <Text style={[styles.errorMessage, { color: themeColors.error }]}>
+                  {errors.password}
+                </Text>
+              ) : null}
             </View>
 
             {/* Botón de Registro */}
-            <TouchableOpacity style={styles.primaryButton} onPress={handleRegister}>
-              <Text style={styles.buttonText}>SIGUIENTE</Text>
+            <TouchableOpacity
+              style={[styles.primaryButton, { backgroundColor: themeColors.buttonBackground }]}
+              onPress={handleRegister}
+            >
+              <Text style={[styles.buttonText, { color: themeColors.buttonText }]}>SIGUIENTE</Text>
             </TouchableOpacity>
 
             {/* Enlace a Login */}
             <TouchableOpacity style={styles.linkContainer} onPress={handleLoginRedirect}>
-              <Text style={styles.linkText}>
-                ¿YA TIENES CUENTA? <Text style={styles.boldLinkText}>INICIA SESIÓN</Text>
+              <Text style={[styles.linkText, { color: themeColors.linkText }]}>
+                ¿YA TIENES CUENTA?{' '}
+                <Text style={[styles.boldLinkText, { color: themeColors.text }]}>
+                  INICIA SESIÓN
+                </Text>
               </Text>
             </TouchableOpacity>
           </View>
 
           {!isSmallScreen && (
-            <View style={styles.imageContainer}>
+            <View
+              style={[styles.imageContainer, { backgroundColor: isDarkMode ? '#222' : '#f5f5f5' }]}
+            >
               <Image
                 source={require('../../assets/images/FOTO 3.jpg')}
                 style={styles.modelImage}
@@ -280,7 +368,6 @@ const RegisterScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
   },
   scrollContainer: {
     flexGrow: 1,

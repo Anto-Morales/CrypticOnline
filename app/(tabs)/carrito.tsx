@@ -20,9 +20,12 @@ const CartScreen: React.FC = () => {
 
   const carrito = useCarrito();
 
-  const shippingCost = 200;
+  const shippingCost = 50;
   const totalProducts = carrito.items.length;
-  const totalProductsPrice = carrito.items.reduce((sum, item) => sum + item.unit_price, 0);
+  const totalProductsPrice = carrito.items.reduce(
+    (sum, item) => sum + item.unit_price * item.quantity,
+    0
+  );
   const totalToPay = totalProductsPrice + shippingCost;
 
   // Estilos responsivos

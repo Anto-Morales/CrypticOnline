@@ -1,17 +1,17 @@
 // src/routes/payment.routes.js
-import { Router } from 'express';
+import express from 'express';
 import {
   createMercadoPagoPreference,
   handleMercadoPagoWebhook,
 } from '../controllers/payment.controller.js';
 import { authenticateToken } from '../middleware/auth.middleware.js';
 
-const router = Router();
+const router = express.Router();
 
-// Generar link de pago (usuario autenticado)
+// Ruta para crear preferencia de pago (requiere autenticación)
 router.post('/create', authenticateToken, createMercadoPagoPreference);
 
-// Endpoint público para recibir notificaciones
+// Ruta para webhook (NO requiere autenticación porque viene de Mercado Pago)
 router.post('/webhook', handleMercadoPagoWebhook);
 
 export default router;

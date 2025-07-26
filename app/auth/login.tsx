@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Alert,
   Image,
@@ -24,20 +24,40 @@ const LoginScreen: React.FC = () => {
   const systemScheme = useColorScheme();
   const isDarkMode = systemScheme === 'dark';
 
-  const themeColors = {
-    background: isDarkMode ? '#000' : '#fff',
-    text: isDarkMode ? '#fff' : '#000',
-    inputBackground: isDarkMode ? '#222' : '#fff',
-    border: isDarkMode ? '#555' : '#000',
-    error: '#ff4d4d',
-    buttonBackground: isDarkMode ? '#fff' : '#000',
-    buttonText: isDarkMode ? '#000' : '#fff',
-    linkText: isDarkMode ? '#ccc' : '#000',
-  };
-
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState({ email: '', password: '' });
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Efecto para manejar la carga inicial
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 100);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const themeColors = {
+    background: isDarkMode ? '#000' : '#fff',
+    text: isDarkMode ? '#fff' : '#000',
+    inputBackground: isDarkMode ? '#333' : '#fff',
+    border: isDarkMode ? '#555' : '#ddd',
+    error: '#ff4d4d',
+    buttonBackground: isDarkMode ? '#fff' : '#000',
+    buttonText: isDarkMode ? '#000' : '#fff',
+    linkText: isDarkMode ? '#fff' : '#000',
+  };
+
+  // Si está cargando, muestra una pantalla con el color del sistema
+  if (isLoading) {
+    return (
+      <View style={[styles.container, { backgroundColor: themeColors.background }]}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <Text style={{ color: themeColors.text }}>Cargando...</Text>
+        </View>
+      </View>
+    );
+  }
 
   const validateEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
@@ -68,7 +88,7 @@ const LoginScreen: React.FC = () => {
   const handleLogin = async () => {
     if (validateForm()) {
       try {
-        const response = await fetch('http://192.168.0.108:3000/api/login', {
+        const response = await fetch('http://192.168.0.108:3000/api/user/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email, password }),

@@ -22,22 +22,22 @@ const HomeScreen = () => {
   const products = [
     {
       id: '1',
-      name: 'PLAYERA 1',
-      price: '999 MXN',
+      name: 'SHIRT ARAB',
+      price: '101 MXN',
       season: 'TEMPORADA 2',
       image: require('../../assets/images/shirt1.png'),
     },
     {
       id: '2',
-      name: 'PLAYERA 2',
-      price: '1500 MXN',
+      name: 'SHIRT DIAMOND TEETH',
+      price: '102 MXN',
       season: 'TEMPORADA 3',
       image: require('../../assets/images/shirt2.png'),
     },
     {
       id: '3',
-      name: 'PLAYERA 3',
-      price: '1000 MXN',
+      name: 'BOLL SHIRT 8',
+      price: '103 MXN',
       season: 'TEMPORADA 4',
       image: require('../../assets/images/shirt3.png'),
     },
@@ -46,20 +46,20 @@ const HomeScreen = () => {
   const featuredProducts = [
     {
       id: '4',
-      name: 'PLAYER A',
-      price: '3909 MXN',
+      name: 'SHIRT ARAB',
+      price: '101 MXN',
       image: require('../../assets/images/shirt1.png'),
     },
     {
       id: '5',
-      name: 'PLAYER B',
-      price: '1500 MXN',
+      name: 'SHIRT DIAMOND TEETH',
+      price: '102 MXN',
       image: require('../../assets/images/shirt2.png'),
     },
     {
       id: '6',
-      name: 'PLAYER C',
-      price: '1300 MXN',
+      name: 'BOLL SHIRT 8',
+      price: '103 MXN',
       image: require('../../assets/images/shirt3.png'),
     },
   ];
