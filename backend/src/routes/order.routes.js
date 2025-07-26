@@ -1,10 +1,10 @@
 import express from 'express';
 import {
   createOrder,
-  getUserOrdersWithItems,
-  getOrderByIdWithItems,
-  updateOrderStatus,
   deleteOrder,
+  getOrderByPreferenceId,
+  getUserOrders,
+  updateOrderStatus,
 } from '../controllers/order.controller.js';
 import { authenticateToken } from '../middleware/auth.middleware.js';
 import prisma from '../prisma/db.js';
@@ -14,8 +14,8 @@ const router = express.Router();
 router.use(authenticateToken);
 
 router.post('/', createOrder);
-router.get('/', getUserOrdersWithItems);
-router.get('/:id', getOrderByIdWithItems);
+router.get('/', getUserOrders);
+router.get('/preference/:preferenceId', getOrderByPreferenceId);
 router.put('/:id', updateOrderStatus);
 router.delete('/:id', deleteOrder);
 

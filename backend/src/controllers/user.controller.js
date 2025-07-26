@@ -80,25 +80,50 @@ export const registerUser = async (req, res) => {
   }
 };
 
+// Función de login corregida
 export const loginUser = async (req, res) => {
   const { email, password } = req.body;
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Email y contraseña son requeridos' });
-  }
+
   try {
-    const user = await prisma.user.findUnique({ where: { email } });
+    // Validar que se proporcionaron email y password
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email y contraseña son requeridos' });
+    }
+
+    // Buscar el usuario por email
+    const user = await prisma.user.findUnique({
+      where: { email: email.toLowerCase().trim() },
+    });
+
     if (!user) {
-      return res.status(401).json({ error: 'Usuario no encontrado' });
+      return res.status(401).json({ error: 'Credenciales incorrectas' });
     }
-    const validPassword = await bcrypt.compare(password, user.password);
-    if (!validPassword) {
-      return res.status(401).json({ error: 'Contraseña incorrecta' });
+
+    // Verificar si la cuenta está activa
+    if (!user.isActive) {
+      return res.status(401).json({ error: 'Cuenta desactivada' });
     }
+
+    // Verificar la contraseña
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      return res.status(401).json({ error: 'Credenciales incorrectas' });
+    }
+
+    // Generar token JWT con más información
     const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role },
+      {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+      },
       process.env.JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: '24h' }
     );
+
+    console.log('Login exitoso para usuario:', user.email, 'ID:', user.id);
+
+    // Respuesta exitosa (sin enviar la contraseña)
     res.status(200).json({
       message: 'Login exitoso',
       token,
@@ -106,19 +131,24 @@ export const loginUser = async (req, res) => {
         id: user.id,
         email: user.email,
         nombres: user.nombres,
+        apellidoPaterno: user.apellidoPaterno,
+        apellidoMaterno: user.apellidoMaterno,
         role: user.role,
-        createdAt: user.createdAt,
       },
     });
   } catch (error) {
-    console.error('[ERROR loginUser]', error);
+    console.error('Error en login:', error);
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 };
 
+// Función para obtener perfil del usuario autenticado
 export const getUserProfile = async (req, res) => {
   try {
-    const userId = req.user.id; // Viene del middleware de autenticación
+    // El middleware ya validó el token y agregó req.user
+    const userId = req.user.id;
+
+    console.log('Obteniendo perfil para usuario ID:', userId);
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -129,9 +159,15 @@ export const getUserProfile = async (req, res) => {
         apellidoMaterno: true,
         email: true,
         telefono: true,
+        calle: true,
+        numero: true,
+        colonia: true,
+        ciudad: true,
+        estado: true,
+        codigoPostal: true,
+        referencias: true,
         role: true,
         createdAt: true,
-        // No incluimos password por seguridad
       },
     });
 
@@ -140,11 +176,10 @@ export const getUserProfile = async (req, res) => {
     }
 
     res.status(200).json({
-      message: 'Perfil obtenido exitosamente',
       user,
     });
   } catch (error) {
-    console.error('[ERROR getUserProfile]', error);
+    console.error('Error al obtener perfil:', error);
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 };

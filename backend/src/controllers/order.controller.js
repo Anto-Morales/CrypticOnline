@@ -185,3 +185,57 @@ export const deleteOrder = async (req, res) => {
     res.status(500).json({ error: 'Error al eliminar el pedido' });
   }
 };
+
+// Obtener todas las órdenes de un usuario
+export const getUserOrders = async (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    const orders = await prisma.order.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        orderItems: {
+          include: {
+            product: true,
+          },
+        },
+      },
+    });
+    res.json(orders);
+  } catch (error) {
+    console.error('Error al obtener las órdenes del usuario:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+};
+
+// Obtener una orden específica por su ID de Mercado Pago (preference_id)
+export const getOrderByPreferenceId = async (req, res) => {
+  const { preferenceId } = req.params;
+  const userId = req.user.id;
+
+  try {
+    const order = await prisma.order.findFirst({
+      where: {
+        paymentId: preferenceId,
+        userId: userId,
+      },
+      include: {
+        orderItems: {
+          include: {
+            product: true,
+          },
+        },
+      },
+    });
+
+    if (!order) {
+      return res.status(404).json({ error: 'Orden no encontrada' });
+    }
+
+    res.json(order);
+  } catch (error) {
+    console.error('Error al obtener la orden:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+};

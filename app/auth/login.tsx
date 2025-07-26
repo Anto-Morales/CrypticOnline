@@ -15,6 +15,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { API_CONFIG, apiRequest } from '../config/api';
 
 const LoginScreen: React.FC = () => {
   const router = useRouter();
@@ -28,6 +29,9 @@ const LoginScreen: React.FC = () => {
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState({ email: '', password: '' });
   const [isLoading, setIsLoading] = useState(true);
+  const [emailFocused, setEmailFocused] = useState(false);
+  const [passwordFocused, setPasswordFocused] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Efecto para manejar la carga inicial
   useEffect(() => {
@@ -40,12 +44,21 @@ const LoginScreen: React.FC = () => {
   const themeColors = {
     background: isDarkMode ? '#000' : '#fff',
     text: isDarkMode ? '#fff' : '#000',
-    inputBackground: isDarkMode ? '#333' : '#fff',
-    border: isDarkMode ? '#555' : '#ddd',
-    error: '#ff4d4d',
+    inputBackground: isDarkMode ? '#1a1a1a' : '#f8f9fa',
+    inputText: isDarkMode ? '#fff' : '#000',
+    inputBorder: isDarkMode ? '#333' : '#e0e0e0',
+    inputBorderFocus: isDarkMode ? '#555' : '#007bff',
+    placeholder: isDarkMode ? '#888' : '#6c757d',
+    error: '#dc3545',
+    success: '#28a745',
+    primary: isDarkMode ? '#0d6efd' : '#007bff',
     buttonBackground: isDarkMode ? '#fff' : '#000',
     buttonText: isDarkMode ? '#000' : '#fff',
-    linkText: isDarkMode ? '#fff' : '#000',
+    buttonSecondary: isDarkMode ? '#333' : '#f8f9fa',
+    buttonSecondaryText: isDarkMode ? '#fff' : '#000',
+    linkText: isDarkMode ? '#87ceeb' : '#007bff',
+    shadow: isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+    overlay: isDarkMode ? 'rgba(0, 0, 0, 0.8)' : 'rgba(255, 255, 255, 0.9)',
   };
 
   // Si está cargando, muestra una pantalla con el color del sistema
@@ -86,24 +99,43 @@ const LoginScreen: React.FC = () => {
   };
 
   const handleLogin = async () => {
-    if (validateForm()) {
-      try {
-        const response = await fetch('http://192.168.0.108:3000/api/user/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password }),
-        });
-        const data = await response.json();
-        if (response.ok && data.token) {
-          await AsyncStorage.setItem('token', data.token);
-          Alert.alert('Login exitoso', 'Bienvenido');
-          router.push('/(tabs)/inicio');
-        } else {
-          Alert.alert('Error ' + response.status, data.error || JSON.stringify(data));
-        }
-      } catch (error) {
-        Alert.alert('Error', 'No se pudo conectar con el backend');
+    if (!validateForm() || isSubmitting) return;
+
+    setIsSubmitting(true);
+
+    try {
+      console.log('Iniciando login...');
+
+      const { response, data } = await apiRequest(API_CONFIG.endpoints.login, {
+        method: 'POST',
+        body: JSON.stringify({
+          email: email.toLowerCase().trim(),
+          password,
+        }),
+      });
+
+      if (response.ok && data.token) {
+        await AsyncStorage.setItem('token', data.token);
+        console.log('Token guardado exitosamente');
+
+        // Navegación simplificada para ambas plataformas
+        console.log('Navegando a inicio...');
+        router.replace('/(tabs)/inicio');
+      } else {
+        console.error('Error en login:', data);
+        Alert.alert('Error de Autenticación', data.error || 'Credenciales incorrectas', [
+          { text: 'Intentar nuevamente' },
+        ]);
       }
+    } catch (error) {
+      console.error('Error de conexión:', error);
+      Alert.alert(
+        'Error de Conexión',
+        `No se pudo conectar con el servidor. ${error instanceof Error ? error.message : 'Error desconocido'}`,
+        [{ text: 'Reintentar' }]
+      );
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -150,22 +182,35 @@ const LoginScreen: React.FC = () => {
                   styles.input,
                   {
                     backgroundColor: themeColors.inputBackground,
-                    color: themeColors.text,
-                    borderColor: errors.email ? themeColors.error : themeColors.border,
+                    color: themeColors.inputText,
+                    borderColor: errors.email
+                      ? themeColors.error
+                      : emailFocused
+                        ? themeColors.inputBorderFocus
+                        : themeColors.inputBorder,
+                    borderWidth: emailFocused ? 2 : 1,
                     width: isSmallScreen ? '100%' : 350,
                     height: isSmallScreen ? 50 : 60,
                     borderRadius: isSmallScreen ? 25 : 30,
+                    shadowColor: themeColors.shadow,
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.1,
+                    shadowRadius: 4,
+                    elevation: 2,
                   },
                 ]}
                 placeholder="EMAIL"
-                placeholderTextColor={isDarkMode ? '#888' : '#aaa'}
+                placeholderTextColor={themeColors.placeholder}
                 value={email}
                 onChangeText={(text) => {
                   setEmail(text);
                   if (errors.email) setErrors({ ...errors, email: '' });
                 }}
+                onFocus={() => setEmailFocused(true)}
+                onBlur={() => setEmailFocused(false)}
                 keyboardType="email-address"
                 autoCapitalize="none"
+                editable={!isSubmitting}
               />
               {errors.email && (
                 <Text style={[styles.errorText, { color: themeColors.error }]}>{errors.email}</Text>
@@ -178,21 +223,34 @@ const LoginScreen: React.FC = () => {
                   styles.input,
                   {
                     backgroundColor: themeColors.inputBackground,
-                    color: themeColors.text,
-                    borderColor: errors.password ? themeColors.error : themeColors.border,
+                    color: themeColors.inputText,
+                    borderColor: errors.password
+                      ? themeColors.error
+                      : passwordFocused
+                        ? themeColors.inputBorderFocus
+                        : themeColors.inputBorder,
+                    borderWidth: passwordFocused ? 2 : 1,
                     width: isSmallScreen ? '100%' : 350,
                     height: isSmallScreen ? 50 : 60,
                     borderRadius: isSmallScreen ? 25 : 30,
+                    shadowColor: themeColors.shadow,
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.1,
+                    shadowRadius: 4,
+                    elevation: 2,
                   },
                 ]}
                 placeholder="CONTRASEÑA"
-                placeholderTextColor={isDarkMode ? '#888' : '#aaa'}
+                placeholderTextColor={themeColors.placeholder}
                 value={password}
                 onChangeText={(text) => {
                   setPassword(text);
                   if (errors.password) setErrors({ ...errors, password: '' });
                 }}
+                onFocus={() => setPasswordFocused(true)}
+                onBlur={() => setPasswordFocused(false)}
                 secureTextEntry
+                editable={!isSubmitting}
               />
               {errors.password && (
                 <Text style={[styles.errorText, { color: themeColors.error }]}>
@@ -209,13 +267,21 @@ const LoginScreen: React.FC = () => {
                   borderRadius: isSmallScreen ? 25 : 50,
                   paddingVertical: isSmallScreen ? 12 : 15,
                   backgroundColor: themeColors.buttonBackground,
+                  shadowColor: themeColors.shadow,
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.2,
+                  shadowRadius: 8,
+                  elevation: 5,
+                  borderWidth: isDarkMode ? 1 : 0,
+                  borderColor: isDarkMode ? '#333' : 'transparent',
                 },
               ]}
               onPress={handleLogin}
               testID="login-button"
+              activeOpacity={0.8}
             >
               <Text style={[styles.buttonText, { color: themeColors.buttonText }]}>
-                INICIAR SESIÓN
+                {isSubmitting ? 'INICIANDO SESIÓN...' : 'INICIAR SESIÓN'}
               </Text>
             </TouchableOpacity>
 

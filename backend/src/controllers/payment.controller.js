@@ -1,7 +1,10 @@
 // src/controllers/payment.controller.js
-import { paymentClient, preferenceClient } from '../utils/mercadopago.js';
-
 import prisma from '../prisma/db.js';
+import { paymentClient, preferenceClient } from '../utils/mercadopago.js';
+import {
+  createOrderStatusNotification,
+  createPaymentSuccessNotification,
+} from './notification.controller.js';
 
 export const createMercadoPagoPreference = async (req, res) => {
   const { items, amount, orderId } = req.body;
@@ -220,6 +223,23 @@ export const handleMercadoPagoWebhook = async (req, res) => {
           amount: transaction_amount || order.total,
         },
       });
+
+      // Crear notificaciones automáticas
+      try {
+        // Notificación de pago exitoso
+        await createPaymentSuccessNotification(
+          order.userId,
+          order.id,
+          transaction_amount || order.total
+        );
+
+        // Notificación de cambio de estado a PAID
+        await createOrderStatusNotification(order.userId, order.id, 'PAID');
+
+        console.log('✅ Notificaciones creadas exitosamente');
+      } catch (notifError) {
+        console.error('❌ Error al crear notificaciones:', notifError);
+      }
 
       console.log('✅ Orden y pago actualizados exitosamente');
     } else if (status === 'rejected' || status === 'cancelled') {

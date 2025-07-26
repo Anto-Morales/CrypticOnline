@@ -41,6 +41,7 @@ model User {
   isActive        Boolean   @default(true)
   orders          Order[]   @relation(name: "UserOrders")
   products        Product[] @relation(name: "UserProducts")
+  notifications   Notification[]
   createdAt       DateTime  @default(now())
 }
 
@@ -106,4 +107,27 @@ model Payment {
   amount       Float
   createdAt    DateTime @default(now())
   order        Order    @relation(fields: [orderId], references: [id])
+}
+
+model Notification {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  type        String   // PAYMENT, ORDER_STATUS, PROMOTION, SYSTEM
+  title       String
+  message     String
+  data        Json?    // Datos adicionales (orderId, etc.)
+  isRead      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Promotion {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String
+  imageUrl    String?
+  isActive    Boolean  @default(true)
+  startDate   DateTime
+  endDate     DateTime
+  createdAt   DateTime @default(now())
 }
