@@ -1,12 +1,12 @@
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect } from 'react';
 import {
-  View,
-  Text,
+  ActivityIndicator,
   StyleSheet,
+  Text,
   TouchableOpacity,
   useColorScheme,
-  ActivityIndicator,
+  View,
 } from 'react-native';
 
 export default function PaymentPendingScreen() {

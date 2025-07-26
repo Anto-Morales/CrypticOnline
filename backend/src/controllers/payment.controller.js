@@ -1,5 +1,5 @@
 // src/controllers/payment.controller.js
-import { preferenceClient, paymentClient } from '../utils/mercadopago.js';
+import { paymentClient, preferenceClient } from '../utils/mercadopago.js';
 
 import prisma from '../prisma/db.js';
 
