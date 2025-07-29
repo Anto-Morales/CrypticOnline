@@ -1,18 +1,20 @@
-import React, { useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
+  Alert,
   Image,
-  StyleSheet,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useColorScheme,
   useWindowDimensions,
-  useColorScheme
+  View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
 
 const LoginScreen: React.FC = () => {
   const router = useRouter();
@@ -20,22 +22,42 @@ const LoginScreen: React.FC = () => {
   const isSmallScreen = width < 768;
 
   const systemScheme = useColorScheme();
-  const isDarkMode = systemScheme !== 'dark'; // 👈 Invertido
-
-  const themeColors = {
-    background: isDarkMode ? '#000' : '#fff',
-    text: isDarkMode ? '#fff' : '#000',
-    inputBackground: isDarkMode ? '#222' : '#fff',
-    border: isDarkMode ? '#555' : '#000',
-    error: '#ff4d4d',
-    buttonBackground: isDarkMode ? '#fff' : '#000',
-    buttonText: isDarkMode ? '#000' : '#fff',
-    linkText: isDarkMode ? '#ccc' : '#000',
-  };
+  const isDarkMode = systemScheme === 'dark';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState({ email: '', password: '' });
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Efecto para manejar la carga inicial
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 100);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const themeColors = {
+    background: isDarkMode ? '#000' : '#fff',
+    text: isDarkMode ? '#fff' : '#000',
+    inputBackground: isDarkMode ? '#333' : '#fff',
+    border: isDarkMode ? '#555' : '#ddd',
+    error: '#ff4d4d',
+    buttonBackground: isDarkMode ? '#fff' : '#000',
+    buttonText: isDarkMode ? '#000' : '#fff',
+    linkText: isDarkMode ? '#fff' : '#000',
+  };
+
+  // Si está cargando, muestra una pantalla con el color del sistema
+  if (isLoading) {
+    return (
+      <View style={[styles.container, { backgroundColor: themeColors.background }]}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <Text style={{ color: themeColors.text }}>Cargando...</Text>
+        </View>
+      </View>
+    );
+  }
 
   const validateEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
@@ -63,10 +85,25 @@ const LoginScreen: React.FC = () => {
     return valid;
   };
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (validateForm()) {
-      console.log('Credenciales válidas, redirigiendo a /home');
-      router.push('/(tabs)/inicio');
+      try {
+        const response = await fetch('http://192.168.0.108:3000/api/user/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        });
+        const data = await response.json();
+        if (response.ok && data.token) {
+          await AsyncStorage.setItem('token', data.token);
+          Alert.alert('Login exitoso', 'Bienvenido');
+          router.push('/(tabs)/inicio');
+        } else {
+          Alert.alert('Error ' + response.status, data.error || JSON.stringify(data));
+        }
+      } catch (error) {
+        Alert.alert('Error', 'No se pudo conectar con el backend');
+      }
     }
   };
 
@@ -79,14 +116,18 @@ const LoginScreen: React.FC = () => {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView contentContainerStyle={styles.scrollContainer}>
-        <View style={[styles.mainContainer, isSmallScreen ? styles.columnLayout : styles.rowLayout]}>
-          <View style={[
-            styles.leftContainer,
-            {
-              width: isSmallScreen ? '100%' : '50%',
-              padding: isSmallScreen ? 40 : 60
-            }
-          ]}>
+        <View
+          style={[styles.mainContainer, isSmallScreen ? styles.columnLayout : styles.rowLayout]}
+        >
+          <View
+            style={[
+              styles.leftContainer,
+              {
+                width: isSmallScreen ? '100%' : '50%',
+                padding: isSmallScreen ? 40 : 60,
+              },
+            ]}
+          >
             <Image
               source={require('../../assets/images/Logo1.png')}
               style={[
@@ -95,15 +136,13 @@ const LoginScreen: React.FC = () => {
                   width: isSmallScreen ? '80%' : 400,
                   height: isSmallScreen ? 200 : 350,
                   marginBottom: isSmallScreen ? 20 : -80,
-                  marginTop: isSmallScreen ? 20 : -70
-                }
+                  marginTop: isSmallScreen ? 20 : -70,
+                },
               ]}
               resizeMode="contain"
             />
 
-            <Text style={[styles.title, { color: themeColors.text }]}>
-              INICIO DE SESIÓN
-            </Text>
+            <Text style={[styles.title, { color: themeColors.text }]}>INICIO DE SESIÓN</Text>
 
             <View style={styles.inputContainer}>
               <TextInput
@@ -116,7 +155,7 @@ const LoginScreen: React.FC = () => {
                     width: isSmallScreen ? '100%' : 350,
                     height: isSmallScreen ? 50 : 60,
                     borderRadius: isSmallScreen ? 25 : 30,
-                  }
+                  },
                 ]}
                 placeholder="EMAIL"
                 placeholderTextColor={isDarkMode ? '#888' : '#aaa'}
@@ -128,7 +167,9 @@ const LoginScreen: React.FC = () => {
                 keyboardType="email-address"
                 autoCapitalize="none"
               />
-              {errors.email && <Text style={[styles.errorText, { color: themeColors.error }]}>{errors.email}</Text>}
+              {errors.email && (
+                <Text style={[styles.errorText, { color: themeColors.error }]}>{errors.email}</Text>
+              )}
             </View>
 
             <View style={styles.inputContainer}>
@@ -142,7 +183,7 @@ const LoginScreen: React.FC = () => {
                     width: isSmallScreen ? '100%' : 350,
                     height: isSmallScreen ? 50 : 60,
                     borderRadius: isSmallScreen ? 25 : 30,
-                  }
+                  },
                 ]}
                 placeholder="CONTRASEÑA"
                 placeholderTextColor={isDarkMode ? '#888' : '#aaa'}
@@ -153,7 +194,11 @@ const LoginScreen: React.FC = () => {
                 }}
                 secureTextEntry
               />
-              {errors.password && <Text style={[styles.errorText, { color: themeColors.error }]}>{errors.password}</Text>}
+              {errors.password && (
+                <Text style={[styles.errorText, { color: themeColors.error }]}>
+                  {errors.password}
+                </Text>
+              )}
             </View>
 
             <TouchableOpacity
@@ -163,18 +208,25 @@ const LoginScreen: React.FC = () => {
                   width: isSmallScreen ? '100%' : 350,
                   borderRadius: isSmallScreen ? 25 : 50,
                   paddingVertical: isSmallScreen ? 12 : 15,
-                  backgroundColor: themeColors.buttonBackground
-                }
+                  backgroundColor: themeColors.buttonBackground,
+                },
               ]}
               onPress={handleLogin}
               testID="login-button"
             >
-              <Text style={[styles.buttonText, { color: themeColors.buttonText }]}>INICIAR SESIÓN</Text>
+              <Text style={[styles.buttonText, { color: themeColors.buttonText }]}>
+                INICIAR SESIÓN
+              </Text>
             </TouchableOpacity>
 
             <View style={styles.linkContainer}>
               <TouchableOpacity onPress={handleForgotPassword}>
-                <Text style={[styles.linkText, { fontSize: isSmallScreen ? 16 : 19, color: themeColors.linkText }]}>
+                <Text
+                  style={[
+                    styles.linkText,
+                    { fontSize: isSmallScreen ? 16 : 19, color: themeColors.linkText },
+                  ]}
+                >
                   ¿Olvidaste tu contraseña?
                 </Text>
               </TouchableOpacity>
@@ -182,7 +234,12 @@ const LoginScreen: React.FC = () => {
 
             <View style={styles.linkContainer}>
               <TouchableOpacity onPress={handleRegister}>
-                <Text style={[styles.linkText, { fontSize: isSmallScreen ? 16 : 19, color: themeColors.linkText }]}>
+                <Text
+                  style={[
+                    styles.linkText,
+                    { fontSize: isSmallScreen ? 16 : 19, color: themeColors.linkText },
+                  ]}
+                >
                   ¿No tienes cuenta? <Text style={styles.boldText}>REGÍSTRATE</Text>
                 </Text>
               </TouchableOpacity>
@@ -199,8 +256,8 @@ const LoginScreen: React.FC = () => {
                     width: width * 0.5,
                     height: height * 0.8,
                     maxWidth: 850,
-                    maxHeight: 650
-                  }
+                    maxHeight: 650,
+                  },
                 ]}
                 resizeMode="contain"
               />

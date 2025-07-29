@@ -152,7 +152,7 @@ const UserProfileScreen: React.FC = () => {
 
                 <TouchableOpacity
                   style={styles.actionButton}
-                  onPress={() => router.push('../edit/direcciones')}
+                  onPress={() => router.push('../tarjeta/SelecTarjeta')}
                 >
                   <MaterialIcons name="history" size={24} color="#000" />
                   <Text style={styles.buttonText}>Historial de pedidos</Text>
@@ -206,7 +206,7 @@ const UserProfileScreen: React.FC = () => {
 
             <TouchableOpacity
               style={styles.actionButton}
-              onPress={() => router.push('../edit/direcciones')}
+              onPress={() => router.push('../tarjeta/SelecTarjeta')}
             >
               <MaterialIcons name="history" size={24} color="#000" />
               <Text style={styles.buttonText}>Historial de pedidos</Text>

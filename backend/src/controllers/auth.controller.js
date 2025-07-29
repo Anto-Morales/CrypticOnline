@@ -5,10 +5,11 @@ import jwt from 'jsonwebtoken';
 export const loginUser = async (req, res) => {
   const { email, password } = req.body;
 
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Correo y contraseña son obligatorios' });
+  if (!email) {
+    return res.status(400).json({ error: 'El correo es obligatorio' });
+  } else if (!password) {
+    return res.status(400).json({ error: 'La contraseña es obligatoria' });
   }
-
   try {
     const user = await prisma.user.findUnique({ where: { email } });
 
@@ -19,15 +20,27 @@ export const loginUser = async (req, res) => {
     const passwordMatch = await bcrypt.compare(password, user.password);
 
     if (!passwordMatch) {
-      return res.status(401).json({ error: 'Correo o contraseña incorrectos' });
+      return res.status(401).json({ error: 'La contraseña es incorrecta' });
+    } else if (user.role !== 'admin' && user.role !== 'customer') {
+      return res.status(403).json({ error: 'Acceso denegado. Rol no permitido.' });
     }
 
     // Generar token JWT
+    // AQUI ES DONDE SE GENERA EL TOKEN SE SERVIRA PARA LA VERIFICACION DE AUTENTICACION
+    // El token contiene el userId, email y role del usuario
     const token = jwt.sign(
-      { userId: user.id, email: user.email },
+      {
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+      },
       process.env.JWT_SECRET,
-      { expiresIn: '7d' }, // duración del token
+      { expiresIn: '7d' }
     );
+    // Enviar respuesta
+    if (!user.isActive) {
+      return res.status(403).json({ error: 'Usuario inactivo. Contacte al administrador.' });
+    }
 
     res.status(200).json({
       message: 'Inicio de sesión exitoso',
@@ -44,4 +57,3 @@ export const loginUser = async (req, res) => {
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 };
-//esto es una prueba

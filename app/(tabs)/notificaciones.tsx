@@ -120,7 +120,7 @@ const styles = StyleSheet.create({
     height: 180,
     borderRadius: 15,
     marginBottom: 15,
-    tintColor: 'gray', // Opcional: aplica tinte gris para ajustar imagen a blanco y negro si es png/svg
+    tintColor: 'gray',
   },
   bannerText: {
     fontSize: 14,
