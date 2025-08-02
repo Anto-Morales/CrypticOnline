@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -7,40 +7,38 @@ import {
   StyleSheet,
   Alert,
   Dimensions,
-  Animated,
   SafeAreaView,
-  Platform,
+  Image,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@expo/vector-icons';
-import LottieView from 'lottie-react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+
+const imagenes = [
+  require('@/assets/images/shirt1.png'),
+  require('@/assets/images/shirt2.png'),
+  require('@/assets/images/shirt3.png'),
+];
 
 const SelecTarjeta = () => {
   const router = useRouter();
+  const params = useLocalSearchParams();
   const screenWidth = Dimensions.get('window').width;
   const isSmallScreen = screenWidth < 600;
 
   const [cardData, setCardData] = useState<any[]>([]);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
 
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(20)).current;
+  // Recibir y normalizar params
+  const nombre = Array.isArray(params.nombre) ? params.nombre[0] : params.nombre || '';
+  const imagenIndexStr = Array.isArray(params.imagen) ? params.imagen[0] : params.imagen || '0';
+  const precioStr = Array.isArray(params.precio) ? params.precio[0] : params.precio || '0';
+  const envioStr = Array.isArray(params.envio) ? params.envio[0] : params.envio || '0';
 
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 500,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, []);
+  const imagenIndex = parseInt(imagenIndexStr, 10);
+  const precio = parseFloat(precioStr);
+  const envio = parseFloat(envioStr);
+  const total = precio + envio;
 
   useEffect(() => {
     const fetchCards = async () => {
@@ -48,8 +46,6 @@ const SelecTarjeta = () => {
         const storedCards = await AsyncStorage.getItem('cards');
         if (storedCards) {
           const parsedCards = JSON.parse(storedCards);
-
-          // Validar que cada tarjeta tenga los datos necesarios
           const validCards = parsedCards.filter(
             (card: any) =>
               card.id &&
@@ -59,7 +55,6 @@ const SelecTarjeta = () => {
               card.type &&
               card.backgroundColor
           );
-
           setCardData(validCards);
         }
       } catch (error) {
@@ -101,11 +96,7 @@ const SelecTarjeta = () => {
         ]}
       >
         <View style={styles.cardHeader}>
-          {item.type === 'Visa' && <MaterialIcons name="credit-card" size={28} color="#fff" />}
-          {item.type === 'Mastercard' && (
-            <MaterialIcons name="credit-card" size={28} color="#fff" />
-          )}
-
+          <MaterialIcons name="credit-card" size={28} color="#fff" />
           {isSelected && <MaterialIcons name="check-circle" size={28} color="#4CAF50" />}
         </View>
 
@@ -128,7 +119,7 @@ const SelecTarjeta = () => {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        {/* Panel izquierdo - Lista de tarjetas */}
+        {/* Panel izquierdo */}
         <View style={styles.cardsPanel}>
           <View style={styles.header}>
             <Text style={styles.title}>Selecciona una tarjeta para pagar</Text>
@@ -138,7 +129,7 @@ const SelecTarjeta = () => {
           {cardData.length === 0 ? (
             <View style={styles.emptyState}>
               <Text style={styles.emptyText}>
-                No hay tarjetas disponibles. Agrega una desde la sección &quot;Mis Tarjetas&quot;.
+                No hay tarjetas disponibles. Agrega una desde la sección &apos;Mis Tarjetas&apos;.
               </Text>
             </View>
           ) : (
@@ -151,9 +142,19 @@ const SelecTarjeta = () => {
             />
           )}
 
-          {/* Botones abajo para pantallas pequeñas */}
           {isSmallScreen && (
-            <View style={{ marginTop: 20 }}>
+            <>
+              <View style={styles.productSummary}>
+                <Text style={styles.summaryTitle}>Resumen del producto</Text>
+                {imagenes[imagenIndex] && (
+                  <Image source={imagenes[imagenIndex]} style={styles.productImage} />
+                )}
+                <Text style={styles.productName}>{nombre}</Text>
+                <Text style={styles.productDetail}>Precio: ${precio.toFixed(2)}</Text>
+                <Text style={styles.productDetail}>Envío: ${envio.toFixed(2)}</Text>
+                <Text style={styles.productTotal}>Total: ${total.toFixed(2)}</Text>
+              </View>
+
               <TouchableOpacity
                 style={[styles.button, styles.primaryButton]}
                 onPress={() => router.push('/tarjeta/tarjeta')}
@@ -170,29 +171,23 @@ const SelecTarjeta = () => {
                 <MaterialIcons name="payment" size={24} color="#fff" />
                 <Text style={styles.buttonText}>Pagar</Text>
               </TouchableOpacity>
-            </View>
+            </>
           )}
         </View>
 
-        {/* Panel derecho - Solo visible en pantallas grandes */}
+        {/* Panel derecho en pantallas grandes */}
         {!isSmallScreen && (
           <View style={styles.actionsPanel}>
-            <Animated.View
-              style={[
-                styles.animationContainer,
-                {
-                  opacity: fadeAnim,
-                  transform: [{ scale: fadeAnim }],
-                },
-              ]}
-            >
-              <LottieView
-                source={require('@/animations/tarjeta.json')}
-                autoPlay
-                loop
-                style={styles.animation}
-              />
-            </Animated.View>
+            <View style={styles.productSummary}>
+              <Text style={styles.summaryTitle}>Resumen del producto</Text>
+              {imagenes[imagenIndex] && (
+                <Image source={imagenes[imagenIndex]} style={styles.productImage} />
+              )}
+              <Text style={styles.productName}>{nombre}</Text>
+              <Text style={styles.productDetail}>Precio: ${precio.toFixed(2)}</Text>
+              <Text style={styles.productDetail}>Envío: ${envio.toFixed(2)}</Text>
+              <Text style={styles.productTotal}>Total: ${total.toFixed(2)}</Text>
+            </View>
 
             <View style={styles.buttonsContainer}>
               <TouchableOpacity
@@ -301,16 +296,8 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
   },
-  animationContainer: {
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  animation: {
-    width: 200,
-    height: 200,
-  },
   buttonsContainer: {
-    marginBottom: 30,
+    marginTop: 20,
   },
   button: {
     flexDirection: 'row',
@@ -351,6 +338,43 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
     marginTop: 20,
+  },
+  productSummary: {
+    backgroundColor: '#f1f3f5',
+    padding: 20,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 30,
+  },
+  summaryTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#343a40',
+    marginBottom: 10,
+  },
+  productImage: {
+    width: 150,
+    height: 150,
+    resizeMode: 'contain',
+    marginBottom: 10,
+  },
+  productName: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#212529',
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  productDetail: {
+    fontSize: 14,
+    color: '#495057',
+    marginBottom: 4,
+  },
+  productTotal: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#28a745',
+    marginTop: 10,
   },
 });
 
