@@ -1,9 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { Stack, useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,6 +12,17 @@ import {
   useColorScheme,
   View,
 } from 'react-native';
+import { apiRequest } from '../config/api';
+import { usePaymentStatusChecker } from '../hooks/usePaymentStatusChecker';
+
+interface Payment {
+  id: number;
+  status: string;
+  amount: number;
+  provider: string;
+  referenceId?: string;
+  createdAt: string;
+}
 
 interface OrderItem {
   id: number;
@@ -27,8 +39,9 @@ interface Order {
   status: string;
   total: number;
   createdAt: string;
-  paidAt: string;
+  paidAt?: string;
   orderItems: OrderItem[];
+  payments?: Payment[];
 }
 
 export default function MisPedidosScreen() {
@@ -38,6 +51,8 @@ export default function MisPedidosScreen() {
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const { autoCheckPendingOrders } = usePaymentStatusChecker();
 
   const fetchOrders = async () => {
     try {
@@ -47,24 +62,53 @@ export default function MisPedidosScreen() {
         return;
       }
 
-      const response = await fetch('http://192.168.0.108:3000/api/orders', {
+      console.log('🔍 Obteniendo lista de pedidos...');
+
+      const { response, data } = await apiRequest('/api/orders', {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
         },
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        setOrders(data);
+      console.log('📡 Respuesta completa:', { status: response.status, data });
+
+      if (response.ok && data && data.success) {
+        const ordersArray = data.orders || [];
+        console.log('✅ Pedidos obtenidos:', ordersArray.length);
+        console.log('📦 Órdenes:', ordersArray);
+        setOrders(ordersArray);
+      } else {
+        console.error('❌ Error al obtener pedidos:', response.status, data);
+        setOrders([]);
       }
     } catch (error) {
       console.error('Error al obtener pedidos:', error);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
+
+  // Refrescar cuando se regresa a la pantalla
+  useFocusEffect(
+    useCallback(() => {
+      console.log('🔄 Pantalla enfocada - Refrescando pedidos...');
+      fetchOrders().then(async () => {
+        // Verificar automáticamente órdenes pendientes después de cargar
+        console.log('🔄 Verificando órdenes pendientes automáticamente...');
+        await autoCheckPendingOrders();
+        // Recargar después de la verificación
+        await fetchOrders();
+      });
+    }, [])
+  );
+
+  // Pull to refresh
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchOrders();
+  }, []);
 
   useEffect(() => {
     fetchOrders();
@@ -106,42 +150,58 @@ export default function MisPedidosScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#009ee3" />
-          <Text style={[styles.loadingText, { color: isDark ? '#fff' : '#000' }]}>
-            Cargando tus pedidos...
-          </Text>
+      <>
+        <Stack.Screen 
+          options={{ 
+            title: 'Mis Pedidos',
+            headerShown: true 
+          }} 
+        />
+        <View style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#009ee3" />
+            <Text style={[styles.loadingText, { color: isDark ? '#fff' : '#000' }]}>
+              Cargando tus pedidos...
+            </Text>
+          </View>
         </View>
-      </View>
+      </>
     );
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Text style={[styles.backButton, { color: isDark ? '#fff' : '#000' }]}>← Volver</Text>
-        </TouchableOpacity>
-        <Text style={[styles.title, { color: isDark ? '#fff' : '#000' }]}>Mis Pedidos</Text>
-      </View>
-
-      <ScrollView style={styles.content}>
-        {orders.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={[styles.emptyText, { color: isDark ? '#ccc' : '#666' }]}>
-              No tienes pedidos aún
-            </Text>
-            <TouchableOpacity
-              style={styles.shopButton}
-              onPress={() => router.push('/(tabs)/inicio')}
-            >
-              <Text style={styles.shopButtonText}>Ir de Compras</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          orders.map((order) => (
+    <>
+      <Stack.Screen 
+        options={{ 
+          title: 'Mis Pedidos',
+          headerShown: true 
+        }} 
+      />
+      <View style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}>
+        <ScrollView 
+          style={styles.content}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={isDark ? '#fff' : '#000'}
+            />
+          }
+        >
+          {orders.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Text style={[styles.emptyText, { color: isDark ? '#ccc' : '#666' }]}>
+                No tienes pedidos aún
+              </Text>
+              <TouchableOpacity
+                style={styles.shopButton}
+                onPress={() => router.push('/(tabs)/inicio')}
+              >
+                <Text style={styles.shopButtonText}>Ir de Compras</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            orders.map((order) => (
             <View
               key={order.id}
               style={[
@@ -201,16 +261,28 @@ export default function MisPedidosScreen() {
 
               {/* Total y acciones */}
               <View style={styles.orderFooter}>
-                <Text style={[styles.orderTotal, { color: isDark ? '#fff' : '#000' }]}>
-                  Total: ${order.total} MXN
-                </Text>
+                <View>
+                  <Text style={[styles.orderTotal, { color: isDark ? '#fff' : '#000' }]}>
+                    Total: ${order.total} MXN
+                  </Text>
+                  {order.payments && order.payments.length > 0 && (
+                    <Text style={[styles.paymentInfo, { color: isDark ? '#ccc' : '#666' }]}>
+                      Pago: {order.payments[0].provider} ({order.payments[0].status})
+                    </Text>
+                  )}
+                </View>
                 <TouchableOpacity
                   style={[styles.detailButton, { borderColor: isDark ? '#fff' : '#000' }]}
                   onPress={() => {
-                    // Navegar a detalles del pedido (podríamos crear una pantalla específica)
+                    // Navegar a una pantalla de detalles específica del pedido
                     router.push({
-                      pathname: '/payment/success',
-                      params: { orderId: order.id },
+                      pathname: '/pedidos/detalle-pedido',
+                      params: { 
+                        orderId: order.id,
+                        status: order.status,
+                        total: order.total,
+                        createdAt: order.createdAt
+                      },
                     });
                   }}
                 >
@@ -220,30 +292,17 @@ export default function MisPedidosScreen() {
                 </TouchableOpacity>
               </View>
             </View>
-          ))
-        )}
-      </ScrollView>
-    </View>
+            ))
+          )}
+        </ScrollView>
+      </View>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 20,
-    paddingTop: 60,
-  },
-  backButton: {
-    fontSize: 16,
-    marginRight: 16,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
   },
   content: {
     flex: 1,
@@ -355,6 +414,10 @@ const styles = StyleSheet.create({
   orderTotal: {
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  paymentInfo: {
+    fontSize: 12,
+    marginTop: 4,
   },
   detailButton: {
     borderWidth: 1,

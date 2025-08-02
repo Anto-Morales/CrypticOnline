@@ -1,0 +1,52 @@
+import { StyleSheet, Text, View } from 'react-native';
+
+export default function AdminUsers() {
+  console.log('👥 ADMIN USERS: Renderizando...');
+  
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>
+        👥 Gestión de Usuarios
+      </Text>
+      <Text style={styles.subtitle}>
+        Administra usuarios registrados
+      </Text>
+      <View style={styles.card}>
+        <Text style={styles.cardText}>
+          ✅ Pantalla de usuarios cargada
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    padding: 20,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#000',
+    marginBottom: 10,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 20,
+  },
+  card: {
+    backgroundColor: '#17a2b8',
+    padding: 15,
+    borderRadius: 8,
+    marginTop: 20,
+  },
+  cardText: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+});

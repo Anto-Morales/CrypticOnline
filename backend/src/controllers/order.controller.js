@@ -105,29 +105,65 @@ export const getUserOrdersWithItems = async (req, res) => {
   }
 };
 
-// Obtener pedido por ID con productos y cantidades
-export const getOrderByIdWithItems = async (req, res) => {
-  const { id } = req.params;
+// Obtener pedido por ID con productos y cantidades (CORREGIDO)
+export const getOrderById = async (req, res) => {
+  const { orderId } = req.params; // Usar orderId del parámetro de ruta
+  const userId = req.user.id;
 
   try {
-    const order = await prisma.order.findUnique({
-      where: { id: parseInt(id) },
+    console.log('Obteniendo orden ID:', orderId, 'para usuario:', userId);
+
+    const order = await prisma.order.findFirst({
+      where: { 
+        id: parseInt(orderId),
+        userId: userId // Solo permitir ver sus propias órdenes
+      },
       include: {
         orderItems: {
           include: {
-            product: true,
+            product: {
+              select: {
+                name: true,
+                imageUrl: true,
+                price: true
+              }
+            },
           },
         },
       },
     });
 
-    if (!order || order.userId !== req.user.userId) {
-      return res.status(403).json({ error: 'No autorizado o pedido no encontrado' });
+    if (!order) {
+      return res.status(404).json({ 
+        error: 'Orden no encontrada o no pertenece al usuario' 
+      });
     }
 
-    res.status(200).json(order);
+    // Buscar información de pago relacionada
+    const payment = await prisma.payment.findFirst({
+      where: {
+        OR: [
+          { referenceId: order.id.toString() },
+          { referenceId: order.preferenceId }
+        ]
+      },
+      select: {
+        status: true,
+        method: true,
+        amount: true
+      }
+    });
+
+    console.log('Orden encontrada:', order.id);
+
+    res.json({
+      order: {
+        ...order,
+        payment: payment || null
+      }
+    });
   } catch (error) {
-    console.error('[ERROR getOrderByIdWithItems]', error);
+    console.error('Error al obtener el pedido:', error);
     res.status(500).json({ error: 'Error al obtener el pedido' });
   }
 };
@@ -215,15 +251,23 @@ export const getOrderByPreferenceId = async (req, res) => {
   const userId = req.user.id;
 
   try {
+    console.log('Buscando orden por preference ID:', preferenceId, 'para usuario:', userId);
+
     const order = await prisma.order.findFirst({
       where: {
-        paymentId: preferenceId,
+        preferenceId: preferenceId, // Usar preferenceId, no paymentId
         userId: userId,
       },
       include: {
         orderItems: {
           include: {
-            product: true,
+            product: {
+              select: {
+                name: true,
+                imageUrl: true,
+                price: true
+              }
+            },
           },
         },
       },
@@ -233,9 +277,181 @@ export const getOrderByPreferenceId = async (req, res) => {
       return res.status(404).json({ error: 'Orden no encontrada' });
     }
 
-    res.json(order);
+    // Buscar información de pago relacionada
+    const payment = await prisma.payment.findFirst({
+      where: {
+        OR: [
+          { referenceId: order.id.toString() },
+          { referenceId: order.preferenceId }
+        ]
+      },
+      select: {
+        status: true,
+        method: true,
+        amount: true
+      }
+    });
+
+    console.log('Orden encontrada por preference:', order.id);
+
+    res.json({
+      order: {
+        ...order,
+        payment: payment || null
+      }
+    });
   } catch (error) {
     console.error('Error al obtener la orden:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+};
+
+// ==========================================
+// FUNCIONES CORREGIDAS PARA ÓRDENES
+// ==========================================
+
+// Obtener orden por ID - VERSIÓN CORREGIDA
+export const getOrderByIdCorrected = async (req, res) => {
+  const { orderId } = req.params;
+  const userId = req.user.id;
+
+  try {
+    console.log('🔍 Obteniendo orden ID:', orderId, 'para usuario:', userId);
+
+    const order = await prisma.order.findFirst({
+      where: { 
+        id: parseInt(orderId),
+        userId: userId
+      },
+      include: {
+        orderItems: {
+          include: {
+            product: {
+              select: {
+                id: true,
+                name: true,
+                imageUrl: true,
+                price: true
+              }
+            },
+          },
+        },
+      },
+    });
+
+    if (!order) {
+      console.log('❌ Orden no encontrada');
+      return res.status(404).json({ 
+        error: 'Orden no encontrada o no pertenece al usuario' 
+      });
+    }
+
+    // Buscar información de pago - SIN campo method
+    let payment = null;
+    try {
+      payment = await prisma.payment.findFirst({
+        where: {
+          OR: [
+            { referenceId: order.id.toString() },
+            ...(order.preferenceId ? [{ referenceId: order.preferenceId }] : [])
+          ]
+        },
+        select: {
+          id: true,
+          status: true,
+          provider: true,
+          amount: true,
+          referenceId: true,
+          createdAt: true
+        }
+      });
+      console.log('💳 Pago encontrado:', payment?.status || 'Sin pago');
+    } catch (paymentError) {
+      console.log('⚠️ Error buscando pago (continuando sin pago):', paymentError.message);
+    }
+
+    console.log('✅ Orden encontrada:', order.id, 'Estado:', order.status);
+
+    res.json({
+      order: {
+        ...order,
+        payment: payment || null
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error al obtener el pedido:', error);
+    res.status(500).json({ error: 'Error al obtener el pedido' });
+  }
+};
+
+// Obtener orden por preference ID - VERSIÓN CORREGIDA
+export const getOrderByPreferenceIdCorrected = async (req, res) => {
+  const { preferenceId } = req.params;
+  const userId = req.user.id;
+
+  try {
+    console.log('🔍 Buscando orden por preference ID:', preferenceId, 'para usuario:', userId);
+
+    const order = await prisma.order.findFirst({
+      where: {
+        preferenceId: preferenceId,
+        userId: userId,
+      },
+      include: {
+        orderItems: {
+          include: {
+            product: {
+              select: {
+                id: true,
+                name: true,
+                imageUrl: true,
+                price: true
+              }
+            },
+          },
+        },
+      },
+    });
+
+    if (!order) {
+      console.log('❌ Orden no encontrada por preference ID');
+      return res.status(404).json({ error: 'Orden no encontrada' });
+    }
+
+    // Buscar información de pago - SIN campo method
+    let payment = null;
+    try {
+      payment = await prisma.payment.findFirst({
+        where: {
+          OR: [
+            { referenceId: order.id.toString() },
+            { referenceId: order.preferenceId }
+          ]
+        },
+        select: {
+          id: true,
+          status: true,
+          provider: true,
+          amount: true,
+          referenceId: true,
+          createdAt: true
+        }
+      });
+      console.log('💳 Pago encontrado por preference:', payment?.status || 'Sin pago');
+    } catch (paymentError) {
+      console.log('⚠️ Error buscando pago (continuando sin pago):', paymentError.message);
+    }
+
+    console.log('✅ Orden encontrada por preference:', order.id, 'Estado:', order.status);
+
+    res.json({
+      order: {
+        ...order,
+        payment: payment || null
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error al obtener la orden por preference:', error);
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 };

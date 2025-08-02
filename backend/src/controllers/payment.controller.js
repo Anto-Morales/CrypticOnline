@@ -1,10 +1,6 @@
 // src/controllers/payment.controller.js
 import prisma from '../prisma/db.js';
 import { paymentClient, preferenceClient } from '../utils/mercadopago.js';
-import {
-  createOrderStatusNotification,
-  createPaymentSuccessNotification,
-} from './notification.controller.js';
 
 export const createMercadoPagoPreference = async (req, res) => {
   const { items, amount, orderId } = req.body;
@@ -88,184 +84,164 @@ export const createMercadoPagoPreference = async (req, res) => {
       preference_id: response.id,
     });
   } catch (error) {
-    console.error('Error al crear pago:', error?.response?.data || error.message || error);
-    res.status(500).json({ error: 'Error al generar el pago', details: error?.message });
+    console.error('Error en createPayment:', error);
+    res.status(500).json({ 
+      error: 'Error interno del servidor',
+      details: error.message 
+    });
   }
 };
 
-export const handleMercadoPagoWebhook = async (req, res) => {
+// ==========================================
+// WEBHOOK CORREGIDO PARA MERCADOPAGO
+// ==========================================
+
+export const webhookMercadoPago = async (req, res) => {
   try {
-    console.log('🔔 Webhook recibido:', req.body);
+    const { type, data } = req.body;
 
-    const { type, action, data, topic, resource } = req.body;
-
-    let paymentId = null;
-
-    // Mercado Pago envía diferentes formatos de webhook
-    if (type === 'payment' && (action === 'payment.updated' || action === 'payment.created')) {
-      paymentId = data?.id;
-      console.log('💳 Webhook formato v1 - Payment ID:', paymentId);
-    } else if (topic === 'payment' && resource) {
-      // Formato: { topic: 'payment', resource: '119398569359' }
-      paymentId = resource;
-      console.log('💳 Webhook formato v2 - Payment ID:', paymentId);
-    } else {
-      console.log('❌ Tipo de notificación no procesada:', { type, action, topic });
-      return res.sendStatus(200); // Respondemos OK pero no procesamos
+    // Solo procesar pagos
+    if (type !== 'payment') {
+      console.log('⚠️ Tipo de webhook ignorado:', type);
+      return res.status(200).json({ received: true });
     }
 
+    const paymentId = data?.id;
     if (!paymentId) {
-      console.log('❌ No se encontró paymentId en el webhook');
-      return res.sendStatus(400);
+      console.log('❌ ID de pago no encontrado en webhook');
+      return res.status(400).json({ error: 'ID de pago requerido' });
     }
 
-    console.log('� Procesando pago ID:', paymentId);
+    console.log('🔍 Procesando pago ID:', paymentId);
 
-    let paymentInfo;
-    try {
-      paymentInfo = await paymentClient.get({ id: paymentId });
-      console.log('📋 Info del pago completa:', JSON.stringify(paymentInfo, null, 2));
-    } catch (err) {
-      console.error('❌ Error al obtener información del pago desde MP:', err);
-      return res.status(500).json({
-        error: 'No se pudo obtener el pago desde Mercado Pago',
-        details: err.message,
-      });
+    // Obtener información del pago desde MercadoPago
+    const payment = await paymentClient.get({ id: paymentId });
+    const { status, external_reference, transaction_amount } = payment;
+
+    console.log('💳 Estado del pago:', status);
+    console.log('📋 Referencia externa:', external_reference);
+    console.log('💰 Monto:', transaction_amount);
+
+    if (!external_reference) {
+      console.log('❌ Referencia externa no encontrada');
+      return res.status(400).json({ error: 'Referencia externa requerida' });
     }
 
-    const { status, transaction_amount, order: mpOrder, external_reference } = paymentInfo;
-
-    console.log('🔍 Información completa del pago:', {
-      status,
-      transaction_amount,
-      preference_id: mpOrder?.preference_id || external_reference || 'No disponible',
-      external_reference,
+    // Buscar la orden por preference_id
+    const order = await prisma.order.findFirst({
+      where: { preferenceId: external_reference }
     });
 
-    // Buscar la orden de múltiples formas
-    let payment = null;
-
-    // 1. Intentar por preference_id si está disponible
-    if (mpOrder?.preference_id) {
-      payment = await prisma.payment.findFirst({
-        where: { referenceId: mpOrder.preference_id },
-        include: { order: true },
-      });
-      console.log(
-        '🔍 Búsqueda por preference_id:',
-        mpOrder.preference_id,
-        payment ? 'ENCONTRADO' : 'NO ENCONTRADO'
-      );
+    if (!order) {
+      console.log('❌ Orden no encontrada para referencia:', external_reference);
+      return res.status(404).json({ error: 'Orden no encontrada' });
     }
 
-    // 2. Intentar por external_reference
-    if (!payment && external_reference) {
-      payment = await prisma.payment.findFirst({
-        where: { referenceId: external_reference },
-        include: { order: true },
-      });
-      console.log(
-        '🔍 Búsqueda por external_reference:',
-        external_reference,
-        payment ? 'ENCONTRADO' : 'NO ENCONTRADO'
-      );
-    }
-
-    // 3. Buscar por monto y estado PENDING en los últimos 10 minutos
-    if (!payment) {
-      const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
-      payment = await prisma.payment.findFirst({
-        where: {
-          amount: transaction_amount,
-          status: 'PENDING',
-          createdAt: {
-            gte: tenMinutesAgo,
-          },
-        },
-        include: { order: true },
-        orderBy: { createdAt: 'desc' },
-      });
-      console.log(
-        '🔍 Búsqueda por monto y tiempo:',
-        transaction_amount,
-        payment ? 'ENCONTRADO' : 'NO ENCONTRADO'
-      );
-    }
-
-    if (!payment || !payment.order) {
-      console.error(
-        '❌ No se encontró orden para el paymentId:',
-        paymentId,
-        'preference_id:',
-        mpOrder?.preference_id
-      );
-      return res.sendStatus(404);
-    }
-
-    const order = payment.order;
     console.log('📦 Orden encontrada:', order.id, 'Estado actual:', order.status);
 
+    // Verificar si el pago ya fue procesado
+    if (status === 'approved' && order.status === 'PAID') {
+      console.log('⚠️ Pago ya procesado, ignorando webhook');
+      return res.status(200).json({ message: 'Pago ya procesado' });
+    }
+
+    // Procesar según el estado del pago
     if (status === 'approved') {
-      console.log('✅ Pago aprobado, actualizando orden...');
-
-      await prisma.order.update({
-        where: { id: order.id },
-        data: {
-          status: 'PAID',
-          paidAt: new Date(),
-        },
+      console.log('✅ Pago aprobado, actualizando...');
+      
+      // Usar transacción para consistencia
+      await prisma.$transaction(async (tx) => {
+        // Actualizar orden
+        await tx.order.update({
+          where: { id: order.id },
+          data: { 
+            status: 'PAID', 
+            paidAt: new Date() 
+          },
+        });
+        
+        // Crear/actualizar registro de pago
+        await tx.payment.upsert({
+          where: { referenceId: String(paymentId) },
+          update: { 
+            status: 'COMPLETED', 
+            amount: transaction_amount || order.total
+          },
+          create: {
+            referenceId: String(paymentId),
+            status: 'COMPLETED',
+            amount: transaction_amount || order.total,
+            provider: 'MERCADOPAGO'
+          }
+        });
       });
 
-      await prisma.payment.updateMany({
-        where: { referenceId: String(paymentId) },
-        data: {
-          status: 'COMPLETED',
-          amount: transaction_amount || order.total,
-        },
-      });
+      console.log('✅ Orden y pago actualizados correctamente');
 
-      // Crear notificaciones automáticas
+      // Crear notificaciones (importación dinámica para evitar errores)
       try {
-        // Notificación de pago exitoso
-        await createPaymentSuccessNotification(
+        const { createNotification } = await import('../controllers/notification.controller.js');
+        
+        // Crear notificación de pago exitoso
+        await createNotification(
           order.userId,
-          order.id,
-          transaction_amount || order.total
+          'PAYMENT',
+          '💳 Pago Confirmado',
+          `Tu pago de $${transaction_amount || order.total} MXN ha sido procesado exitosamente.`,
+          { orderId: order.id, amount: transaction_amount || order.total }
         );
-
-        // Notificación de cambio de estado a PAID
-        await createOrderStatusNotification(order.userId, order.id, 'PAID');
+        
+        // Crear notificación de estado de pedido
+        await createNotification(
+          order.userId,
+          'ORDER_STATUS',
+          '📦 Pedido en Preparación',
+          `Tu pedido #${order.id} ha sido confirmado y está siendo preparado.`,
+          { orderId: order.id, status: 'PAID' }
+        );
 
         console.log('✅ Notificaciones creadas exitosamente');
       } catch (notifError) {
-        console.error('❌ Error al crear notificaciones:', notifError);
+        console.error('⚠️ Error creando notificaciones (no crítico):', notifError.message);
       }
 
-      console.log('✅ Orden y pago actualizados exitosamente');
-    } else if (status === 'rejected' || status === 'cancelled') {
-      console.log('❌ Pago rechazado/cancelado, actualizando orden...');
-
-      await prisma.payment.updateMany({
+    } else if (status === 'pending') {
+      console.log('⏳ Pago pendiente');
+      await prisma.payment.upsert({
         where: { referenceId: String(paymentId) },
-        data: { status: 'FAILED' },
+        update: { status: 'PENDING' },
+        create: {
+          referenceId: String(paymentId),
+          status: 'PENDING',
+          amount: transaction_amount || order.total,
+          provider: 'MERCADOPAGO'
+        }
       });
 
-      await prisma.order.update({
-        where: { id: order.id },
-        data: { status: 'FAILED' },
+    } else if (status === 'cancelled' || status === 'rejected') {
+      console.log('❌ Pago cancelado/rechazado');
+      await prisma.$transaction(async (tx) => {
+        await tx.order.update({
+          where: { id: order.id },
+          data: { status: 'CANCELLED' }
+        });
+        
+        await tx.payment.upsert({
+          where: { referenceId: String(paymentId) },
+          update: { status: 'FAILED' },
+          create: {
+            referenceId: String(paymentId),
+            status: 'FAILED',
+            amount: transaction_amount || order.total,
+            provider: 'MERCADOPAGO'
+          }
+        });
       });
-
-      console.log('❌ Orden marcada como fallida');
-    } else {
-      console.log('⏳ Estado del pago:', status, '- No requiere acción');
     }
 
-    res.sendStatus(200);
+    res.status(200).json({ message: 'Webhook procesado correctamente' });
   } catch (error) {
-    console.error('💥 Error en el webhook:', error);
-    res.status(500).json({
-      error: 'Error en el webhook',
-      details: error.message,
-    });
+    console.error('❌ Error crítico en webhook:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
   }
 };

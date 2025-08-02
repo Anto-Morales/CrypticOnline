@@ -8,17 +8,27 @@ import {
   useColorScheme,
   View,
 } from 'react-native';
+import PaymentNotificationOverlay from '../components/PaymentNotificationOverlay';
+import { usePaymentNotifications } from '../hooks/usePaymentNotifications';
 
 export default function PaymentPendingScreen() {
   const router = useRouter();
   const scheme = useColorScheme();
   const isDark = scheme === 'dark';
   const params = useLocalSearchParams();
+  const { notification, showPaymentAlert, hideNotification } = usePaymentNotifications();
 
   useEffect(() => {
+    // Mostrar notificación de pendiente
+    showPaymentAlert(
+      'pending',
+      'Pago Pendiente ⏳',
+      'Tu pago está siendo procesado. Te notificaremos cuando se complete.'
+    );
+
     // Auto-redirigir después de 4 segundos
     const timer = setTimeout(() => {
-      router.push('/(tabs)/inicio');
+      router.replace('/(tabs)/inicio');
     }, 4000);
 
     return () => clearTimeout(timer);
@@ -26,6 +36,14 @@ export default function PaymentPendingScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}>
+      <PaymentNotificationOverlay
+        show={notification.show}
+        type={notification.type}
+        title={notification.title}
+        message={notification.message}
+        onHide={hideNotification}
+      />
+      
       <View style={[styles.card, { backgroundColor: isDark ? '#222' : '#f5f5f5' }]}>
         <ActivityIndicator size="large" color="#FF9800" style={{ marginBottom: 20 }} />
         <Text style={[styles.title, { color: '#FF9800' }]}>Pago Pendiente</Text>
@@ -38,7 +56,7 @@ export default function PaymentPendingScreen() {
 
         <TouchableOpacity
           style={[styles.button, { backgroundColor: '#FF9800' }]}
-          onPress={() => router.push('/(tabs)/inicio')}
+          onPress={() => router.replace('/(tabs)/inicio')}
         >
           <Text style={styles.buttonText}>Volver al Inicio</Text>
         </TouchableOpacity>

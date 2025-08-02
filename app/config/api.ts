@@ -20,9 +20,9 @@ export const API_CONFIG = {
 
   // Endpoints específicos
   endpoints: {
-    login: '/api/user/login',
-    register: '/api/user/register',
-    profile: '/api/user/profile',
+    login: '/api/auth/login',
+    profile: '/api/auth/profile',
+    verify: '/api/auth/verify',
     orders: '/api/orders',
     notifications: '/api/notifications',
     payments: '/api/payments',

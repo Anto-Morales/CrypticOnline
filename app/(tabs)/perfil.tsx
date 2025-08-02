@@ -3,7 +3,6 @@ import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Button,
   Image,
   StyleSheet,
   Text,
@@ -46,13 +45,16 @@ export default function PerfilProfesionalScreen() {
   const fetchUserProfile = async () => {
     try {
       const token = await AsyncStorage.getItem('token');
+      console.log('🔍 Token encontrado:', token ? 'SÍ' : 'NO');
+      
       if (!token) {
-        console.log('No token found, redirecting to login');
+        console.log('❌ No token found, redirecting to login');
         router.push('/auth/login');
         return;
       }
 
-      console.log('Fetching user profile...');
+      console.log('📡 Fetching user profile...');
+      console.log('🌐 URL:', `${API_CONFIG.getBaseURL()}${API_CONFIG.endpoints.profile}`);
 
       const { response, data } = await apiRequest(API_CONFIG.endpoints.profile, {
         method: 'GET',
@@ -61,19 +63,39 @@ export default function PerfilProfesionalScreen() {
         },
       });
 
-      if (response.ok) {
-        console.log('Profile data received:', data.user);
+      console.log('📡 Response status:', response.status);
+      console.log('📦 Response data:', JSON.stringify(data, null, 2));
+
+      if (response.ok && data.user) {
+        console.log('✅ Profile data received:', data.user);
         setUser(data.user);
       } else if (response.status === 401) {
         // Token inválido o expirado
-        console.log('Token invalid, removing and redirecting to login');
+        console.log('❌ Token invalid, removing and redirecting to login');
         await AsyncStorage.removeItem('token');
+        await AsyncStorage.removeItem('user');
         router.push('/auth/login');
       } else {
-        console.error('Error fetching profile:', response.status, data);
+        console.error('❌ Error fetching profile:', response.status, data);
+        // Intentar cargar usuario guardado localmente como fallback
+        const savedUser = await AsyncStorage.getItem('user');
+        if (savedUser) {
+          console.log('💾 Using saved user data as fallback');
+          setUser(JSON.parse(savedUser));
+        }
       }
     } catch (error) {
-      console.error('Error fetching profile:', error);
+      console.error('❌ Error fetching profile:', error);
+      // Intentar cargar usuario guardado localmente como fallback
+      try {
+        const savedUser = await AsyncStorage.getItem('user');
+        if (savedUser) {
+          console.log('💾 Using saved user data after error');
+          setUser(JSON.parse(savedUser));
+        }
+      } catch (fallbackError) {
+        console.error('❌ Error loading saved user:', fallbackError);
+      }
     } finally {
       setLoading(false);
     }
@@ -81,10 +103,22 @@ export default function PerfilProfesionalScreen() {
 
   const handleLogout = async () => {
     try {
+      console.log('🚪 Cerrando sesión...');
+      
+      // Eliminar todos los datos de sesión
       await AsyncStorage.removeItem('token');
-      router.push('/auth/login');
+      await AsyncStorage.removeItem('user');
+      await AsyncStorage.removeItem('userProfile');
+      await AsyncStorage.removeItem('isLoggedIn');
+      
+      console.log('✅ Sesión cerrada completamente');
+      
+      // Redirigir al login de inicio (fuera de las tabs)
+      router.replace('/auth/login');
     } catch (error) {
-      console.error('Error al cerrar sesión:', error);
+      console.error('❌ Error al cerrar sesión:', error);
+      // Incluso si hay error, intentar redirigir
+      router.replace('/auth/login');
     }
   };
 
@@ -121,14 +155,30 @@ export default function PerfilProfesionalScreen() {
         <Text style={[styles.profesion, { color: textColor }]}>
           {user.role === 'admin' ? 'Administrador' : 'Cliente'}
         </Text>
-        <Text style={[styles.descripcion, { color: infoColor }]}>
-          Apasionado por la tecnología, con experiencia en desarrollo web y móvil. Siempre
-          aprendiendo y buscando nuevos retos.
-        </Text>
-        <View style={{ marginTop: 30 }}>
-          <Button title="Editar perfil" onPress={() => {}} color={isDark ? '#fff' : '#000'} />
-          <View style={{ marginTop: 10 }} />
-          <Button title="Cerrar sesión" onPress={handleLogout} color="red" />
+        <View style={{ marginTop: 30, width: '100%' }}>
+          <TouchableOpacity
+            style={[
+              styles.editButton,
+              { backgroundColor: isDark ? '#fff' : '#007bff' }
+            ]}
+            onPress={() => router.push('/perfil/editar-perfil')}
+          >
+            <Text style={[
+              styles.editButtonText,
+              { color: isDark ? '#000' : '#fff' }
+            ]}>
+               Editar Perfil
+            </Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[styles.logoutButton]}
+            onPress={handleLogout}
+          >
+            <Text style={styles.logoutButtonText}>
+               Cerrar Sesión
+            </Text>
+          </TouchableOpacity>
         </View>
         <View style={{ marginTop: 20, width: '100%' }}>
           <TouchableOpacity
@@ -142,7 +192,7 @@ export default function PerfilProfesionalScreen() {
             onPress={() => router.push('/pedidos/mis-pedidos')}
           >
             <Text style={[styles.optionText, { color: isDark ? '#fff' : '#000' }]}>
-              📦 Mis Pedidos
+               Mis Pedidos
             </Text>
           </TouchableOpacity>
         </View>
@@ -193,5 +243,38 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 16,
     fontSize: 16,
+  },
+  editButton: {
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  editButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  logoutButton: {
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    alignItems: 'center',
+    backgroundColor: '#dc3545',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  logoutButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#fff',
   },
 });

@@ -1,4 +1,4 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
   Image,
@@ -26,7 +26,14 @@ export default function ProductoDetalleScreen() {
   const carrito = useCarrito();
 
   return (
-    <View style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}>
+    <>
+      <Stack.Screen 
+        options={{ 
+          title: 'Detalle del Producto',
+          headerShown: true 
+        }} 
+      />
+      <View style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}>
       <Image
         source={
           params.image ? { uri: params.image as string } : require('../../assets/images/shirt1.png')
@@ -66,6 +73,38 @@ export default function ProductoDetalleScreen() {
           <Text style={styles.cantidadBtnText}>+</Text>
         </TouchableOpacity>
       </View>
+      {/* RESUMEN DE COSTOS - FUERA DEL CONTAINER DE BOTONES */}
+      <View style={[styles.costSummary, { backgroundColor: isDark ? '#222' : '#f5f5f5' }]}>
+        <Text style={[styles.costLabel, { color: isDark ? '#ccc' : '#666' }]}>
+          Resumen de compra:
+        </Text>
+        <View style={styles.costRow}>
+          <Text style={[styles.costText, { color: isDark ? '#fff' : '#000' }]}>
+            Producto ({cantidad}x):
+          </Text>
+          <Text style={[styles.costText, { color: isDark ? '#fff' : '#000' }]}>
+            ${(Number(String(params.price).replace(/[^\d.]/g, '')) * cantidad).toFixed(2)}
+          </Text>
+        </View>
+        <View style={styles.costRow}>
+          <Text style={[styles.costText, { color: isDark ? '#fff' : '#000' }]}>
+            Envío:
+          </Text>
+          <Text style={[styles.costText, { color: isDark ? '#fff' : '#000' }]}>
+            $50.00
+          </Text>
+        </View>
+        <View style={[styles.costRow, styles.totalRow]}>
+          <Text style={[styles.totalText, { color: isDark ? '#fff' : '#000' }]}>
+            Total:
+          </Text>
+          <Text style={[styles.totalText, { color: isDark ? '#fff' : '#000' }]}>
+            ${((Number(String(params.price).replace(/[^\d.]/g, '')) * cantidad) + 50).toFixed(2)}
+          </Text>
+        </View>
+      </View>
+      
+      {/* BOTONES DE ACCIÓN */}
       <View style={styles.buttonsRow}>
         <TouchableOpacity
           style={[styles.button, { backgroundColor: isDark ? '#fff' : '#000' }]}
@@ -88,21 +127,35 @@ export default function ProductoDetalleScreen() {
             Agregar al carrito
           </Text>
         </TouchableOpacity>
+        
         <TouchableOpacity
           style={[styles.button, { backgroundColor: '#009ee3' }]}
           onPress={() => {
+            const productPrice = Number(String(params.price).replace(/[^\d.]/g, ''));
+            const shippingCost = 50;
+            const totalWithShipping = (productPrice * cantidad) + shippingCost;
+            
             router.push({
               pathname: '/pago/pago' as any,
               params: {
+                productoId: params.id,
+                precio: productPrice.toString(),
+                nombre: params.name,
+                cantidad: cantidad.toString(),
+                talla: talla,
+                costoEnvio: shippingCost.toString(),
+                totalConEnvio: totalWithShipping.toString(),
+                // También enviar cartItems para compatibilidad
                 cartItems: JSON.stringify([
                   {
+                    id: params.id, // AGREGAR ID
                     title: params.name,
-                    quantity: cantidad,
-                    unit_price: Number(String(params.price).replace(/[^\d.]/g, '')),
+                    quantity: cantidad, // USAR LA CANTIDAD SELECCIONADA
+                    unit_price: productPrice,
                     talla: talla,
+                    productId: parseInt(params.id), // ID COMO NÚMERO
                   },
                 ]),
-                productoId: params.id,
               },
             });
           }}
@@ -111,11 +164,18 @@ export default function ProductoDetalleScreen() {
         </TouchableOpacity>
       </View>
     </View>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 },
+  container: { 
+    flex: 1, 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    padding: 20,
+    paddingBottom: 50, // AGREGAR MÁS ESPACIO EN LA PARTE INFERIOR
+  },
   imagen: { width: 220, height: 220, marginBottom: 20 },
   nombre: { fontSize: 24, fontWeight: 'bold', marginBottom: 8 },
   precio: { fontSize: 20, fontWeight: '600', marginBottom: 12 },
@@ -144,7 +204,70 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     color: '#000',
   },
-  buttonsRow: { flexDirection: 'row', justifyContent: 'space-between', width: '100%' },
-  button: { flex: 1, padding: 14, borderRadius: 8, alignItems: 'center', marginHorizontal: 8 },
-  buttonText: { fontWeight: 'bold', fontSize: 16 },
+  // ESTILOS PARA RESUMEN DE COSTOS - MEJORADOS
+  costSummary: {
+    width: '100%',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 32, // MÁS ESPACIO ANTES DE LOS BOTONES
+    borderWidth: 1,
+    borderColor: '#ddd',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  costLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  costRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+    paddingHorizontal: 4,
+  },
+  costText: {
+    fontSize: 14,
+  },
+  totalRow: {
+    borderTopWidth: 1,
+    borderTopColor: '#ddd',
+    paddingTop: 12,
+    marginTop: 8,
+  },
+  totalText: {
+    fontSize: 18, // Más grande para destacar
+    fontWeight: 'bold',
+  },
+  // ESTILOS PARA BOTONES - MEJORADOS CON MÁS ESPACIO
+  buttonsRow: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    width: '100%',
+    gap: 12, // Espacio entre botones
+    marginBottom: 40, // AGREGAR MARGEN INFERIOR PARA SEPARAR DEL INDICADOR DE iOS
+    paddingHorizontal: 4, // Un poco de padding lateral
+  },
+  button: { 
+    flex: 1, 
+    paddingVertical: 16, // Más altura
+    paddingHorizontal: 12,
+    borderRadius: 12, // Más redondeado
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  buttonText: { 
+    fontWeight: 'bold', 
+    fontSize: 16,
+    textAlign: 'center',
+  },
 });

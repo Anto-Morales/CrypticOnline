@@ -1,41 +1,99 @@
-import React, { useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
+  Alert,
   Image,
-  StyleSheet,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useColorScheme,
   useWindowDimensions,
-  useColorScheme
+  View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { API_CONFIG, apiRequest } from './config/api';
 
-const LoginScreen: React.FC = () => {
+const IndexLoginScreen: React.FC = () => {
   const router = useRouter();
   const { width, height } = useWindowDimensions();
   const isSmallScreen = width < 768;
 
   const systemScheme = useColorScheme();
-  const isDarkMode = systemScheme !== 'dark'; // 👈 Invertido
-
-  const themeColors = {
-    background: isDarkMode ? '#000' : '#fff',
-    text: isDarkMode ? '#fff' : '#000',
-    inputBackground: isDarkMode ? '#222' : '#fff',
-    border: isDarkMode ? '#555' : '#000',
-    error: '#ff4d4d',
-    buttonBackground: isDarkMode ? '#fff' : '#000',
-    buttonText: isDarkMode ? '#000' : '#fff',
-    linkText: isDarkMode ? '#ccc' : '#000',
-  };
+  const isDarkMode = systemScheme === 'dark';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState({ email: '', password: '' });
+  const [isLoading, setIsLoading] = useState(true);
+  const [emailFocused, setEmailFocused] = useState(false);
+  const [passwordFocused, setPasswordFocused] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Verificar si ya hay una sesión activa
+  useEffect(() => {
+    const checkExistingSession = async () => {
+      try {
+        const token = await AsyncStorage.getItem('token');
+        if (token) {
+          console.log('✅ Sesión existente encontrada, navegando a inicio...');
+          router.replace('/(tabs)/inicio');
+          return;
+        }
+      } catch (error) {
+        console.log('⚠️ Error verificando sesión:', error);
+      }
+      
+      // Si no hay sesión, mostrar login
+      setTimeout(() => {
+        setIsLoading(false);
+      }, 500);
+    };
+
+    checkExistingSession();
+  }, []);
+
+  const themeColors = {
+    background: isDarkMode ? '#000' : '#fff',
+    text: isDarkMode ? '#fff' : '#000',
+    inputBackground: isDarkMode ? '#1a1a1a' : '#f8f9fa',
+    inputText: isDarkMode ? '#fff' : '#000',
+    inputBorder: isDarkMode ? '#333' : '#e0e0e0',
+    inputBorderFocus: isDarkMode ? '#555' : '#007bff',
+    placeholder: isDarkMode ? '#888' : '#6c757d',
+    error: '#dc3545',
+    success: '#28a745',
+    primary: isDarkMode ? '#0d6efd' : '#007bff',
+    buttonBackground: isDarkMode ? '#fff' : '#000',
+    buttonText: isDarkMode ? '#000' : '#fff',
+    buttonSecondary: isDarkMode ? '#333' : '#f8f9fa',
+    buttonSecondaryText: isDarkMode ? '#fff' : '#000',
+    linkText: isDarkMode ? '#87ceeb' : '#007bff',
+    shadow: isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+    overlay: isDarkMode ? 'rgba(0, 0, 0, 0.8)' : 'rgba(255, 255, 255, 0.9)',
+  };
+
+  // Pantalla de carga
+  if (isLoading) {
+    return (
+      <View style={[styles.container, { backgroundColor: themeColors.background }]}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <Image
+            source={require('../assets/images/Logo.png')}
+            style={{ width: 200, height: 200, marginBottom: 20 }}
+            resizeMode="contain"
+          />
+          <Text style={{ color: themeColors.text, fontSize: 18 }}>CrypticOnline</Text>
+          <Text style={{ color: themeColors.placeholder, fontSize: 14, marginTop: 10 }}>
+            Cargando...
+          </Text>
+        </View>
+      </View>
+    );
+  }
 
   const validateEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
@@ -63,15 +121,48 @@ const LoginScreen: React.FC = () => {
     return valid;
   };
 
-  const handleLogin = () => {
-    if (validateForm()) {
-      console.log('Credenciales válidas, redirigiendo a /home');
-      router.push('/(tabs)/inicio');
+  const handleLogin = async () => {
+    if (!validateForm() || isSubmitting) return;
+
+    setIsSubmitting(true);
+
+    try {
+      console.log('🔑 Iniciando login desde index...');
+
+      const { response, data } = await apiRequest(API_CONFIG.endpoints.login, {
+        method: 'POST',
+        body: JSON.stringify({
+          email: email.toLowerCase().trim(),
+          password,
+        }),
+      });
+
+      if (response.ok && data.token) {
+        await AsyncStorage.setItem('token', data.token);
+        console.log('✅ Token guardado, navegando a inicio...');
+
+        // Navegación al inicio de la app
+        router.replace('/(tabs)/inicio');
+      } else {
+        console.error('❌ Error en login:', data);
+        Alert.alert('Error de Autenticación', data.error || 'Credenciales incorrectas', [
+          { text: 'Intentar nuevamente' },
+        ]);
+      }
+    } catch (error) {
+      console.error('❌ Error de conexión:', error);
+      Alert.alert(
+        'Error de Conexión',
+        `No se pudo conectar con el servidor. ${error instanceof Error ? error.message : 'Error desconocido'}`,
+        [{ text: 'Reintentar' }]
+      );
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const handleForgotPassword = () => router.push('../auth/Nvpassword');
-  const handleRegister = () => router.push('../auth/registro');
+  const handleForgotPassword = () => router.push('/auth/Nvpassword');
+  const handleRegister = () => router.push('/auth/registro');
 
   return (
     <KeyboardAvoidingView
@@ -79,14 +170,18 @@ const LoginScreen: React.FC = () => {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView contentContainerStyle={styles.scrollContainer}>
-        <View style={[styles.mainContainer, isSmallScreen ? styles.columnLayout : styles.rowLayout]}>
-          <View style={[
-            styles.leftContainer,
-            {
-              width: isSmallScreen ? '100%' : '50%',
-              padding: isSmallScreen ? 40 : 60
-            }
-          ]}>
+        <View
+          style={[styles.mainContainer, isSmallScreen ? styles.columnLayout : styles.rowLayout]}
+        >
+          <View
+            style={[
+              styles.leftContainer,
+              {
+                width: isSmallScreen ? '100%' : '50%',
+                padding: isSmallScreen ? 40 : 60,
+              },
+            ]}
+          >
             <Image
               source={require('../assets/images/Logo1.png')}
               style={[
@@ -95,14 +190,15 @@ const LoginScreen: React.FC = () => {
                   width: isSmallScreen ? '80%' : 400,
                   height: isSmallScreen ? 200 : 350,
                   marginBottom: isSmallScreen ? 20 : -80,
-                  marginTop: isSmallScreen ? 20 : -70
-                }
+                  marginTop: isSmallScreen ? 20 : -70,
+                },
               ]}
               resizeMode="contain"
             />
 
-            <Text style={[styles.title, { color: themeColors.text }]}>
-              INICIO DE SESIÓN
+            <Text style={[styles.title, { color: themeColors.text }]}>BIENVENIDO A CRYPTICONLINE</Text>
+            <Text style={[styles.subtitle, { color: themeColors.placeholder }]}>
+              Inicia sesión para continuar
             </Text>
 
             <View style={styles.inputContainer}>
@@ -111,24 +207,39 @@ const LoginScreen: React.FC = () => {
                   styles.input,
                   {
                     backgroundColor: themeColors.inputBackground,
-                    color: themeColors.text,
-                    borderColor: errors.email ? themeColors.error : themeColors.border,
+                    color: themeColors.inputText,
+                    borderColor: errors.email
+                      ? themeColors.error
+                      : emailFocused
+                        ? themeColors.inputBorderFocus
+                        : themeColors.inputBorder,
+                    borderWidth: emailFocused ? 2 : 1,
                     width: isSmallScreen ? '100%' : 350,
                     height: isSmallScreen ? 50 : 60,
                     borderRadius: isSmallScreen ? 25 : 30,
-                  }
+                    shadowColor: themeColors.shadow,
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.1,
+                    shadowRadius: 4,
+                    elevation: 2,
+                  },
                 ]}
                 placeholder="EMAIL"
-                placeholderTextColor={isDarkMode ? '#888' : '#aaa'}
+                placeholderTextColor={themeColors.placeholder}
                 value={email}
                 onChangeText={(text) => {
                   setEmail(text);
                   if (errors.email) setErrors({ ...errors, email: '' });
                 }}
+                onFocus={() => setEmailFocused(true)}
+                onBlur={() => setEmailFocused(false)}
                 keyboardType="email-address"
                 autoCapitalize="none"
+                editable={!isSubmitting}
               />
-              {errors.email && <Text style={[styles.errorText, { color: themeColors.error }]}>{errors.email}</Text>}
+              {errors.email && (
+                <Text style={[styles.errorText, { color: themeColors.error }]}>{errors.email}</Text>
+              )}
             </View>
 
             <View style={styles.inputContainer}>
@@ -137,23 +248,40 @@ const LoginScreen: React.FC = () => {
                   styles.input,
                   {
                     backgroundColor: themeColors.inputBackground,
-                    color: themeColors.text,
-                    borderColor: errors.password ? themeColors.error : themeColors.border,
+                    color: themeColors.inputText,
+                    borderColor: errors.password
+                      ? themeColors.error
+                      : passwordFocused
+                        ? themeColors.inputBorderFocus
+                        : themeColors.inputBorder,
+                    borderWidth: passwordFocused ? 2 : 1,
                     width: isSmallScreen ? '100%' : 350,
                     height: isSmallScreen ? 50 : 60,
                     borderRadius: isSmallScreen ? 25 : 30,
-                  }
+                    shadowColor: themeColors.shadow,
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.1,
+                    shadowRadius: 4,
+                    elevation: 2,
+                  },
                 ]}
                 placeholder="CONTRASEÑA"
-                placeholderTextColor={isDarkMode ? '#888' : '#aaa'}
+                placeholderTextColor={themeColors.placeholder}
                 value={password}
                 onChangeText={(text) => {
                   setPassword(text);
                   if (errors.password) setErrors({ ...errors, password: '' });
                 }}
+                onFocus={() => setPasswordFocused(true)}
+                onBlur={() => setPasswordFocused(false)}
                 secureTextEntry
+                editable={!isSubmitting}
               />
-              {errors.password && <Text style={[styles.errorText, { color: themeColors.error }]}>{errors.password}</Text>}
+              {errors.password && (
+                <Text style={[styles.errorText, { color: themeColors.error }]}>
+                  {errors.password}
+                </Text>
+              )}
             </View>
 
             <TouchableOpacity
@@ -163,26 +291,55 @@ const LoginScreen: React.FC = () => {
                   width: isSmallScreen ? '100%' : 350,
                   borderRadius: isSmallScreen ? 25 : 50,
                   paddingVertical: isSmallScreen ? 12 : 15,
-                  backgroundColor: themeColors.buttonBackground
-                }
+                  backgroundColor: themeColors.buttonBackground,
+                  shadowColor: themeColors.shadow,
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.2,
+                  shadowRadius: 8,
+                  elevation: 5,
+                  borderWidth: isDarkMode ? 1 : 0,
+                  borderColor: isDarkMode ? '#333' : 'transparent',
+                  opacity: isSubmitting ? 0.7 : 1,
+                },
               ]}
               onPress={handleLogin}
-              testID="login-button"
+              disabled={isSubmitting}
+              activeOpacity={0.8}
             >
-              <Text style={[styles.buttonText, { color: themeColors.buttonText }]}>INICIAR SESIÓN</Text>
+              <Text style={[styles.buttonText, { color: themeColors.buttonText }]}>
+                {isSubmitting ? 'INICIANDO SESIÓN...' : 'INICIAR SESIÓN'}
+              </Text>
             </TouchableOpacity>
 
             <View style={styles.linkContainer}>
-              <TouchableOpacity onPress={handleForgotPassword}>
-                <Text style={[styles.linkText, { fontSize: isSmallScreen ? 16 : 19, color: themeColors.linkText }]}>
+              <TouchableOpacity onPress={handleForgotPassword} disabled={isSubmitting}>
+                <Text
+                  style={[
+                    styles.linkText,
+                    { 
+                      fontSize: isSmallScreen ? 16 : 19, 
+                      color: themeColors.linkText,
+                      opacity: isSubmitting ? 0.5 : 1
+                    },
+                  ]}
+                >
                   ¿Olvidaste tu contraseña?
                 </Text>
               </TouchableOpacity>
             </View>
 
             <View style={styles.linkContainer}>
-              <TouchableOpacity onPress={handleRegister}>
-                <Text style={[styles.linkText, { fontSize: isSmallScreen ? 16 : 19, color: themeColors.linkText }]}>
+              <TouchableOpacity onPress={handleRegister} disabled={isSubmitting}>
+                <Text
+                  style={[
+                    styles.linkText,
+                    { 
+                      fontSize: isSmallScreen ? 16 : 19, 
+                      color: themeColors.linkText,
+                      opacity: isSubmitting ? 0.5 : 1
+                    },
+                  ]}
+                >
                   ¿No tienes cuenta? <Text style={styles.boldText}>REGÍSTRATE</Text>
                 </Text>
               </TouchableOpacity>
@@ -199,8 +356,8 @@ const LoginScreen: React.FC = () => {
                     width: width * 0.5,
                     height: height * 0.8,
                     maxWidth: 850,
-                    maxHeight: 650
-                  }
+                    maxHeight: 650,
+                  },
                 ]}
                 resizeMode="contain"
               />
@@ -212,7 +369,7 @@ const LoginScreen: React.FC = () => {
   );
 };
 
-export default LoginScreen;
+export default IndexLoginScreen;
 
 const styles = StyleSheet.create({
   container: {
@@ -244,6 +401,11 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: 'bold',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  subtitle: {
+    fontSize: 16,
     marginBottom: 30,
     textAlign: 'center',
   },

@@ -1,5 +1,7 @@
 import { useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Dimensions,
   FlatList,
   Image,
@@ -9,8 +11,21 @@ import {
   TextInput,
   TouchableOpacity,
   useColorScheme,
-  View,
+  View
 } from 'react-native';
+import { apiRequest } from '../config/api';
+
+// Interfaces
+interface Product {
+  id: number;
+  name: string;
+  description: string;
+  price: number;
+  stock: number;
+  imageUrl: string;
+  userId: number;
+  createdAt: string;
+}
 
 const HomeScreen = () => {
   const router = useRouter();
@@ -18,54 +33,63 @@ const HomeScreen = () => {
   const scheme = useColorScheme();
   const isDark = scheme === 'dark';
 
-  // Datos de productos
-  const products = [
-    {
-      id: '1',
-      name: 'SHIRT ARAB',
-      price: '101 MXN',
-      season: 'TEMPORADA 2',
-      image: require('../../assets/images/shirt1.png'),
-    },
-    {
-      id: '2',
-      name: 'SHIRT DIAMOND TEETH',
-      price: '102 MXN',
-      season: 'TEMPORADA 3',
-      image: require('../../assets/images/shirt2.png'),
-    },
-    {
-      id: '3',
-      name: 'BOLL SHIRT 8',
-      price: '103 MXN',
-      season: 'TEMPORADA 4',
-      image: require('../../assets/images/shirt3.png'),
-    },
-  ];
+  // Estados para productos reales
+  const [products, setProducts] = useState<Product[]>([]);
+  const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const featuredProducts = [
-    {
-      id: '4',
-      name: 'SHIRT ARAB',
-      price: '101 MXN',
-      image: require('../../assets/images/shirt1.png'),
-    },
-    {
-      id: '5',
-      name: 'SHIRT DIAMOND TEETH',
-      price: '102 MXN',
-      image: require('../../assets/images/shirt2.png'),
-    },
-    {
-      id: '6',
-      name: 'BOLL SHIRT 8',
-      price: '103 MXN',
-      image: require('../../assets/images/shirt3.png'),
-    },
-  ];
+  // Cargar productos reales al iniciar
+  useEffect(() => {
+    loadProducts();
+  }, []);
 
-  const navigateToProduct = (id: string) => {
-    router.push({ pathname: '../productos', params: { id } });
+  const loadProducts = async () => {
+    try {
+      console.log('🛍️ Cargando productos para la tienda...');
+      
+      const { response, data } = await apiRequest('/api/simple-products', {
+        method: 'GET',
+      });
+
+      if (response.ok && data.products) {
+        // Filtrar solo productos con stock disponible
+        const availableProducts = data.products.filter((product: Product) => product.stock > 0);
+        
+        console.log(`✅ ${availableProducts.length} productos disponibles cargados`);
+        
+        // Separar productos: los más recientes y los destacados
+        const recentProducts = availableProducts.slice(0, 6); // Primeros 6 para "LO ÚLTIMO"
+        const topProducts = availableProducts.slice(-6); // Últimos 6 para "MÁS VENDIDOS"
+        
+        setProducts(recentProducts);
+        setFeaturedProducts(topProducts);
+      } else {
+        console.error('❌ Error cargando productos:', data.error);
+        // Mantener productos de ejemplo si hay error
+        setProducts([]);
+        setFeaturedProducts([]);
+      }
+    } catch (error) {
+      console.error('❌ Error de conexión:', error);
+      // Mantener productos de ejemplo si hay error de conexión
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const navigateToProduct = (product: Product) => {
+    router.push({
+      pathname: '/producto/producto-detalle',
+      params: {
+        id: product.id.toString(),
+        name: product.name,
+        price: product.price.toString(),
+        description: product.description,
+        imageUrl: product.imageUrl,
+        stock: product.stock.toString()
+      },
+    });
   };
 
   // Ajuste responsivo para todas las tarjetas
@@ -84,22 +108,16 @@ const HomeScreen = () => {
     marginBottom: -40,
   };
 
-  interface Product {
-    id: string;
-    name: string;
-    price: string;
-    season?: string;
-    image: any;
-  }
-
   const navigateToProductDetail = (product: Product) => {
     router.push({
       pathname: '/producto/producto-detalle',
       params: {
-        id: product.id,
+        id: product.id.toString(),
         name: product.name,
-        price: product.price,
-        image: product.image && typeof product.image === 'number' ? product.image : undefined,
+        price: product.price.toString(),
+        description: product.description,
+        imageUrl: product.imageUrl,
+        stock: product.stock.toString()
       },
     });
   };
@@ -146,24 +164,36 @@ const HomeScreen = () => {
 
         {/* Sección LO ÚLTIMO EN MODA */}
         <Text style={styles.sectionTitle}>LO ÚLTIMO EN MODA</Text>
-        <FlatList
-          horizontal
-          data={products}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={productCardStyle}
-              onPress={() => navigateToProductDetail(item)}
-            >
-              <Image source={item.image} style={productImageStyle} resizeMode="contain" />
-              <Text style={styles.productName}>{item.name}</Text>
-              <Text style={styles.productPrice}>{item.price}</Text>
-              <Text style={styles.productSeason}>{item.season}</Text>
-            </TouchableOpacity>
-          )}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.productsContainer}
-          showsHorizontalScrollIndicator={false}
-        />
+        
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#fff" />
+            <Text style={styles.loadingText}>Cargando productos...</Text>
+          </View>
+        ) : (
+          <FlatList
+            horizontal
+            data={products}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={productCardStyle}
+                onPress={() => navigateToProductDetail(item)}
+              >
+                <Image 
+                  source={item.imageUrl ? { uri: item.imageUrl } : { uri: 'https://via.placeholder.com/300x300?text=Producto' }} 
+                  style={productImageStyle} 
+                  resizeMode="contain" 
+                />
+                <Text style={styles.productName}>{item.name}</Text>
+                <Text style={styles.productPrice}>${item.price.toFixed(2)}</Text>
+                <Text style={styles.productSeason}>Stock: {item.stock}</Text>
+              </TouchableOpacity>
+            )}
+            keyExtractor={(item) => item.id.toString()}
+            contentContainerStyle={styles.productsContainer}
+            showsHorizontalScrollIndicator={false}
+          />
+        )}
 
         {/* Banner de preventa */}
         <View style={styles.presaleSection}>
@@ -189,9 +219,13 @@ const HomeScreen = () => {
               style={productCardStyle}
               onPress={() => navigateToProductDetail(product)}
             >
-              <Image source={product.image} style={productImageStyle} resizeMode="contain" />
+              <Image 
+                source={product.imageUrl ? { uri: product.imageUrl } : { uri: 'https://via.placeholder.com/300x300?text=Producto' }} 
+                style={productImageStyle} 
+                resizeMode="contain" 
+              />
               <Text style={styles.featuredName}>{product.name}</Text>
-              <Text style={styles.featuredPrice}>{product.price}</Text>
+              <Text style={styles.featuredPrice}>${product.price.toFixed(2)}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -369,6 +403,17 @@ const styles = StyleSheet.create({
   searchText: {
     color: '#aaa',
     fontSize: 14,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 50,
+  },
+  loadingText: {
+    color: '#fff',
+    fontSize: 16,
+    marginTop: 10,
   },
 });
 

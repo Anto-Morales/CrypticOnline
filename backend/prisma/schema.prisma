@@ -103,7 +103,7 @@ model Payment {
   orderId      Int
   provider     String   // Ej: PAYPAL, MERCADOPAGO
   status       String   // Ej: PENDING, COMPLETED, FAILED
-  referenceId  String?  // ID externo del proveedor
+  referenceId  String?  @unique // HACER ÚNICO PARA UPSERT
   amount       Float
   createdAt    DateTime @default(now())
   order        Order    @relation(fields: [orderId], references: [id])

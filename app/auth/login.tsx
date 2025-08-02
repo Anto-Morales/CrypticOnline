@@ -33,7 +33,6 @@ const LoginScreen: React.FC = () => {
   const [passwordFocused, setPasswordFocused] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Efecto para manejar la carga inicial
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsLoading(false);
@@ -61,7 +60,6 @@ const LoginScreen: React.FC = () => {
     overlay: isDarkMode ? 'rgba(0, 0, 0, 0.8)' : 'rgba(255, 255, 255, 0.9)',
   };
 
-  // Si está cargando, muestra una pantalla con el color del sistema
   if (isLoading) {
     return (
       <View style={[styles.container, { backgroundColor: themeColors.background }]}>
@@ -104,36 +102,151 @@ const LoginScreen: React.FC = () => {
     setIsSubmitting(true);
 
     try {
-      console.log('Iniciando login...');
+      console.log('🔐 Intentando login con:', email);
+      console.log('🌐 URL del servidor:', `${API_CONFIG.getBaseURL()}${API_CONFIG.endpoints.login}`);
 
       const { response, data } = await apiRequest(API_CONFIG.endpoints.login, {
         method: 'POST',
-        body: JSON.stringify({
-          email: email.toLowerCase().trim(),
-          password,
-        }),
+        body: JSON.stringify({ email, password }),
       });
 
-      if (response.ok && data.token) {
-        await AsyncStorage.setItem('token', data.token);
-        console.log('Token guardado exitosamente');
+      console.log('📡 Status de respuesta:', response.status);
+      console.log('📦 Datos completos recibidos:', JSON.stringify(data, null, 2));
 
-        // Navegación simplificada para ambas plataformas
-        console.log('Navegando a inicio...');
-        router.replace('/(tabs)/inicio');
+      if (response.ok && data.token) {
+        console.log('✅ Login exitoso, guardando token...');
+
+        // Guardar token
+        await AsyncStorage.setItem('token', data.token);
+        console.log('💾 Token guardado:', data.token.substring(0, 20) + '...');
+
+        // Guardar datos del usuario si están disponibles
+        if (data.user) {
+          await AsyncStorage.setItem('user', JSON.stringify(data.user));
+          console.log('👤 Usuario guardado:', data.user.email);
+        }
+
+        // Verificar que se guardó correctamente
+        const savedToken = await AsyncStorage.getItem('token');
+        console.log('🔍 Token verificado en storage:', savedToken ? 'SÍ' : 'NO');
+
+        // Navegación según el rol
+        try {
+          console.log('🔀 Iniciando navegación...');
+          console.log('📍 Rol del usuario:', data.user?.role);
+          
+          // Normalizar rol para comparación
+          const userRole = (data.user?.role || '').toUpperCase();
+          console.log('🔍 Rol normalizado:', userRole);
+          
+          // Decidir ruta según el rol
+          let targetRoute: any = '/(tabs)/inicio'; // Default para usuarios normales
+          
+          // Detectar si es administrador de cualquiera de estas formas:
+          // 1. Rol explícitamente 'ADMIN'
+          // 2. ID igual a 1 (admin principal)
+          // 3. Rol 'admin' en minúsculas
+          const isAdmin = userRole === 'ADMIN' || 
+                         data.user?.id === 1 || 
+                         userRole === 'admin'.toUpperCase();
+          
+          if (isAdmin) {
+            targetRoute = '/admin/dashboard'; // Para administradores
+            console.log('🛡️ Usuario administrador detectado:', {
+              userRole,
+              userId: data.user?.id,
+              isAdminByRole: userRole === 'ADMIN',
+              isAdminById: data.user?.id === 1,
+              finalIsAdmin: isAdmin
+            });
+          } else {
+            console.log('👤 Usuario normal detectado:', {
+              userRole,
+              userId: data.user?.id,
+              targetRoute
+            });
+          }
+          
+          console.log('📍 Ruta objetivo:', targetRoute);
+          console.log('🔀 Navegando a:', targetRoute);
+          
+          // Intentar navegación
+          router.replace(targetRoute);
+          console.log('✅ Comando de navegación enviado');
+          
+          // Alert de bienvenida con rol específico
+          setTimeout(() => {
+            // Usar la misma lógica para determinar el mensaje
+            const isAdminForMessage = userRole === 'ADMIN' || 
+                                    data.user?.id === 1 || 
+                                    userRole === 'admin'.toUpperCase();
+            
+            const welcomeMessage = isAdminForMessage ? 
+              `¡Bienvenido Administrador! ${data.user?.nombres || 'Admin'}` :
+              `¡Bienvenido! ${data.user?.nombres || 'Usuario'}`;
+              
+            console.log('🔍 Mostrando mensaje de bienvenida...', {
+              isAdminForMessage,
+              userRole,
+              userId: data.user?.id,
+              welcomeMessage
+            });
+            
+            Alert.alert('¡Acceso exitoso!', welcomeMessage, [
+              { 
+                text: 'Continuar',
+                onPress: () => {
+                  console.log('🔄 Usuario confirmó acceso');
+                  console.log('✅ Usuario en la app');
+                }
+              }
+            ]);
+          }, 1500);
+          
+        } catch (navError) {
+          console.error('❌ Error en navegación:', navError);
+          
+          // Mensaje específico según el rol para debugging
+          const userRole = (data.user?.role || '').toUpperCase();
+          console.log('🔍 Error con rol:', userRole);
+          
+          Alert.alert(
+            'Problema de navegación', 
+            `No se pudo navegar automáticamente (Rol: ${userRole}). Toca "Ir a Inicio" para continuar.`,
+            [
+              {
+                text: 'Ir a Inicio',
+                onPress: () => {
+                  try {
+                    if (userRole === 'ADMIN') {
+                      router.push('/admin/dashboard' as any);
+                    } else {
+                      router.push('/(tabs)/inicio');
+                    }
+                  } catch (finalError) {
+                    console.error('❌ Error final:', finalError);
+                    Alert.alert('Error crítico', 'Por favor reinicia la aplicación.');
+                  }
+                }
+              }
+            ]
+          );
+        }
       } else {
-        console.error('Error en login:', data);
-        Alert.alert('Error de Autenticación', data.error || 'Credenciales incorrectas', [
-          { text: 'Intentar nuevamente' },
-        ]);
+        console.error('❌ Login falló:', {
+          status: response.status,
+          hasToken: !!data.token,
+          error: data.error,
+          fullData: data,
+        });
+        Alert.alert('Error', data.error || 'Credenciales inválidas');
       }
     } catch (error) {
-      console.error('Error de conexión:', error);
-      Alert.alert(
-        'Error de Conexión',
-        `No se pudo conectar con el servidor. ${error instanceof Error ? error.message : 'Error desconocido'}`,
-        [{ text: 'Reintentar' }]
-      );
+      console.error('❌ Error de red completo:', error);
+      if (error instanceof Error) {
+        console.error('❌ Stack trace:', error.stack);
+      }
+      Alert.alert('Error', 'Error de conexión. Intenta nuevamente.');
     } finally {
       setIsSubmitting(false);
     }
