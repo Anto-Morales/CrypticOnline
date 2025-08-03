@@ -1,9 +1,11 @@
 import { useRouter } from 'expo-router';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, useColorScheme, View } from 'react-native';
+import PaymentAlert from '../components/PaymentAlert';
 import PaymentNotificationOverlay from '../components/PaymentNotificationOverlay';
 import { useCarrito } from '../context/CarritoContext';
 import { usePaymentNotifications } from '../hooks/usePaymentNotifications';
+import { usePaymentReturnHandler } from '../hooks/usePaymentReturnHandler';
 
 export default function SuccessScreen() {
   const router = useRouter();
@@ -11,19 +13,29 @@ export default function SuccessScreen() {
   const scheme = useColorScheme();
   const isDark = scheme === 'dark';
   const { notification, showPaymentAlert, hideNotification } = usePaymentNotifications();
+  const { alertData, handlePrimaryAction, handleSecondaryAction, hideAlert } = usePaymentReturnHandler();
+  const [showCustomAlert, setShowCustomAlert] = useState(false);
 
   useEffect(() => {
     // Limpiar carrito al llegar a success
     console.log('🎉 Pago exitoso - Limpiando carrito');
     carrito.clearCart();
     
-    // Mostrar notificación de éxito
-    showPaymentAlert(
-      'success',
-      '¡Pago Exitoso! ✅',
-      'Tu pago ha sido procesado correctamente. Recibirás un email de confirmación en breve.'
-    );
+    // Mostrar alerta personalizada en lugar de notificación
+    setTimeout(() => {
+      setShowCustomAlert(true);
+    }, 500);
   }, []);
+
+  const handleSuccessAction = () => {
+    setShowCustomAlert(false);
+    router.replace('/pedidos/mis-pedidos');
+  };
+
+  const handleContinueAction = () => {
+    setShowCustomAlert(false);
+    router.replace('/(tabs)/inicio');
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}>
@@ -34,6 +46,32 @@ export default function SuccessScreen() {
         message={notification.message}
         onHide={hideNotification}
       />
+
+      {/* Alerta personalizada de pago exitoso */}
+      <PaymentAlert
+        visible={showCustomAlert}
+        type="success"
+        title="¡Pago Exitoso!"
+        message="Tu pago ha sido procesado correctamente. Recibirás un email de confirmación en breve."
+        onPrimaryAction={handleSuccessAction}
+        onSecondaryAction={handleContinueAction}
+        primaryText="Ver Pedidos"
+        secondaryText="Seguir Comprando"
+      />
+
+      {/* También mantener la alerta del hook para cuando regrese de MercadoPago */}
+      {alertData.visible && (
+        <PaymentAlert
+          visible={alertData.visible}
+          type={alertData.type}
+          title={alertData.title}
+          message={alertData.message}
+          onPrimaryAction={handlePrimaryAction}
+          onSecondaryAction={alertData.type === 'error' ? handleSecondaryAction : undefined}
+          primaryText={alertData.type === 'success' ? 'Ver Pedidos' : 'Entendido'}
+          secondaryText={alertData.type === 'error' ? 'Reintentar' : undefined}
+        />
+      )}
       
       <View style={styles.content}>
         <Text style={[styles.title, { color: isDark ? '#fff' : '#000' }]}>

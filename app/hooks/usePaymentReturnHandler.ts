@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, AppState } from 'react-native';
+import { AppState } from 'react-native';
 import { apiRequest } from '../config/api';
 
 interface PaymentSession {
@@ -9,11 +9,27 @@ interface PaymentSession {
   preferenceId: string;
   startTime: number;
   isActive: boolean;
+  lastChecked?: number; // Prevenir múltiples verificaciones
+}
+
+interface PaymentAlertData {
+  visible: boolean;
+  type: 'success' | 'pending' | 'error';
+  title: string;
+  message: string;
+  orderId?: string;
 }
 
 export const usePaymentReturnHandler = () => {
   const router = useRouter();
   const [paymentSession, setPaymentSession] = useState<PaymentSession | null>(null);
+  const [alertData, setAlertData] = useState<PaymentAlertData>({
+    visible: false,
+    type: 'success',
+    title: '',
+    message: '',
+  });
+  const [isChecking, setIsChecking] = useState(false); // Prevenir verificaciones simultáneas
 
   // Iniciar sesión de pago
   const startPaymentSession = async (orderId: string, preferenceId: string) => {
@@ -33,12 +49,21 @@ export const usePaymentReturnHandler = () => {
   const endPaymentSession = async () => {
     await AsyncStorage.removeItem('activePaymentSession');
     setPaymentSession(null);
+    setIsChecking(false);
     console.log('💳 Sesión de pago finalizada');
   };
 
-  // Verificar estado del pago
-  const checkPaymentOnReturn = async () => {
+  // Verificar estado del pago (con prevención de duplicados)
+  const checkPaymentOnReturn = async (forceCheck = false) => {
+    // Prevenir verificaciones simultáneas
+    if (isChecking && !forceCheck) {
+      console.log('🔄 Ya hay una verificación en progreso, saltando...');
+      return;
+    }
+
     try {
+      setIsChecking(true);
+      
       const sessionData = await AsyncStorage.getItem('activePaymentSession');
       if (!sessionData) {
         console.log('🔍 No hay sesión de pago activa');
@@ -51,7 +76,14 @@ export const usePaymentReturnHandler = () => {
         return;
       }
 
-      console.log('🔄 Usuario regresó a la app, verificando pago...', session);
+      // Prevenir verificaciones muy frecuentes (mínimo 3 segundos entre verificaciones)
+      const now = Date.now();
+      if (session.lastChecked && (now - session.lastChecked) < 3000 && !forceCheck) {
+        console.log('⏰ Verificación demasiado reciente, esperando...');
+        return;
+      }
+
+      console.log('🔄 Verificando pago para orden:', session.orderId);
 
       const token = await AsyncStorage.getItem('token');
       if (!token) {
@@ -59,13 +91,17 @@ export const usePaymentReturnHandler = () => {
         return;
       }
 
-      // Verificar estado de la orden con retry
+      // Actualizar timestamp de última verificación
+      session.lastChecked = now;
+      await AsyncStorage.setItem('activePaymentSession', JSON.stringify(session));
+
+      // Verificación más agresiva con reintentos rápidos
       let attempts = 0;
-      const maxAttempts = 3;
+      const maxAttempts = 5; // Más intentos
       
       while (attempts < maxAttempts) {
         try {
-          console.log(`🔍 Intento ${attempts + 1} de verificación...`);
+          console.log(`🔍 Intento ${attempts + 1}/${maxAttempts} de verificación...`);
           
           const { response, data } = await apiRequest(`/api/orders/${session.orderId}`, {
             method: 'GET',
@@ -74,19 +110,24 @@ export const usePaymentReturnHandler = () => {
 
           if (response.ok && data.order) {
             const order = data.order;
-            console.log('📊 Estado de la orden verificado:', order.status);
+            console.log('📊 Estado verificado:', {
+              orderId: order.id,
+              status: order.status,
+              total: order.total,
+              attempts: attempts + 1
+            });
 
-            // Finalizar sesión antes de mostrar notificación
+            // Finalizar sesión inmediatamente
             await endPaymentSession();
 
-            // Mostrar notificación según el estado
+            // Mostrar alerta personalizada con delay mínimo
             setTimeout(() => {
-              showPaymentResultNotification(order);
-            }, 1500); // Más tiempo para que la app se cargue
+              showPaymentAlert(order);
+            }, 500);
 
-            return; // Salir del loop si fue exitoso
+            return; // Salir exitosamente
           } else {
-            console.log(`⚠️ Intento ${attempts + 1} falló:`, response.status);
+            console.log(`⚠️ Intento ${attempts + 1} falló - Status: ${response.status}`);
           }
         } catch (attemptError: any) {
           console.log(`❌ Error en intento ${attempts + 1}:`, attemptError?.message || attemptError);
@@ -94,123 +135,143 @@ export const usePaymentReturnHandler = () => {
         
         attempts++;
         if (attempts < maxAttempts) {
-          await new Promise(resolve => setTimeout(resolve, 2000)); // Esperar 2 segundos
+          // Reintentos más rápidos: 1s, 2s, 3s, 4s
+          await new Promise(resolve => setTimeout(resolve, attempts * 1000));
         }
       }
       
-      // Si todos los intentos fallaron, mostrar error genérico
+      // Si todos los intentos fallaron
+      console.log('❌ Todos los intentos de verificación fallaron');
       await endPaymentSession();
+      
       setTimeout(() => {
-        showPaymentResultNotification({ 
-          status: 'UNKNOWN', 
-          total: 0, 
-          id: session.orderId 
+        showPaymentAlert({ 
+          id: session.orderId,
+          status: 'PENDING', 
+          total: 0 
         });
-      }, 1500);
+      }, 500);
 
     } catch (error) {
       console.error('❌ Error verificando pago al regresar:', error);
       await endPaymentSession();
+    } finally {
+      setIsChecking(false);
     }
   };
 
-  // Mostrar notificación de resultado
-  const showPaymentResultNotification = (order: any) => {
+  // Mostrar alerta personalizada
+  const showPaymentAlert = (order: any) => {
+    let alertConfig: PaymentAlertData;
+
     switch (order.status) {
       case 'PAID':
-        Alert.alert(
-          '¡Pago Exitoso! ✅',
-          `Tu pago de $${order.total} MXN ha sido procesado correctamente.\n\nPedido #${order.id}`,
-          [
-            {
-              text: 'Ver Pedidos',
-              onPress: () => router.replace('/pedidos/mis-pedidos')
-            },
-            {
-              text: 'Continuar Comprando',
-              onPress: () => router.replace('/(tabs)/inicio'),
-              style: 'cancel'
-            }
-          ]
-        );
+        alertConfig = {
+          visible: true,
+          type: 'success',
+          title: '¡Pago Exitoso!',
+          message: `Tu pago de $${order.total} MXN ha sido procesado correctamente.\n\nPedido #${order.id}`,
+          orderId: order.id.toString(),
+        };
         break;
 
       case 'PENDING':
-        Alert.alert(
-          'Pago Pendiente ⏳',
-          `Tu pago está siendo procesado. Te notificaremos cuando se complete.\n\nPedido #${order.id}`,
-          [
-            {
-              text: 'Entendido',
-              onPress: () => router.replace('/(tabs)/inicio')
-            }
-          ]
-        );
+        alertConfig = {
+          visible: true,
+          type: 'pending',
+          title: 'Pago en Proceso',
+          message: `Tu pago está siendo procesado. Te notificaremos cuando se complete.\n\nPedido #${order.id}`,
+          orderId: order.id.toString(),
+        };
         break;
 
       case 'CANCELLED':
       case 'FAILED':
-        Alert.alert(
-          'Pago No Completado ❌',
-          'Tu pago no pudo ser procesado. Puedes intentar nuevamente.',
-          [
-            {
-              text: 'Reintentar',
-              onPress: () => router.replace('/(tabs)/carrito')
-            },
-            {
-              text: 'Ir al Inicio',
-              onPress: () => router.replace('/(tabs)/inicio'),
-              style: 'cancel'
-            }
-          ]
-        );
+        alertConfig = {
+          visible: true,
+          type: 'error',
+          title: 'Pago No Completado',
+          message: 'Tu pago no pudo ser procesado. Puedes intentar nuevamente.',
+          orderId: order.id.toString(),
+        };
         break;
 
-      case 'UNKNOWN':
       default:
-        Alert.alert(
-          'Verificando Pago ⏳',
-          'Estamos verificando el estado de tu pago. Te notificaremos cuando tengamos más información.',
-          [
-            {
-              text: 'Ver Pedidos',
-              onPress: () => router.replace('/pedidos/mis-pedidos')
-            },
-            {
-              text: 'Ir al Inicio',
-              onPress: () => router.replace('/(tabs)/inicio'),
-              style: 'cancel'
-            }
-          ]
-        );
+        alertConfig = {
+          visible: true,
+          type: 'pending',
+          title: 'Verificando Pago',
+          message: 'Estamos verificando el estado de tu pago. Te notificaremos cuando tengamos más información.',
+          orderId: order.id.toString(),
+        };
         break;
+    }
+
+    setAlertData(alertConfig);
+  };
+
+  // Cerrar alerta
+  const hideAlert = () => {
+    setAlertData(prev => ({ ...prev, visible: false }));
+  };
+
+  // Acciones de los botones de la alerta
+  const handlePrimaryAction = () => {
+    hideAlert();
+    if (alertData.type === 'success') {
+      router.replace('/pedidos/mis-pedidos');
+    } else {
+      router.replace('/(tabs)/inicio');
     }
   };
 
-  // Listener para detectar cuando la app vuelve al foreground
+  const handleSecondaryAction = () => {
+    hideAlert();
+    if (alertData.type === 'error') {
+      router.replace('/(tabs)/carrito');
+    } else {
+      router.replace('/(tabs)/inicio');
+    }
+  };
+
+  // Listener optimizado para detectar cuando la app vuelve al foreground
   useEffect(() => {
+    let timeoutId: any;
+
     const handleAppStateChange = (nextAppState: string) => {
       if (nextAppState === 'active') {
         console.log('📱 App volvió al foreground');
-        // Verificar si hay una sesión de pago activa
-        checkPaymentOnReturn();
+        
+        // Pequeño delay para asegurar que la app esté completamente cargada
+        timeoutId = setTimeout(() => {
+          checkPaymentOnReturn();
+        }, 1000);
       }
     };
 
     const subscription = AppState.addEventListener('change', handleAppStateChange);
 
-    // Verificar al montar el componente
-    checkPaymentOnReturn();
+    // Verificar una sola vez al montar
+    timeoutId = setTimeout(() => {
+      checkPaymentOnReturn();
+    }, 1500);
 
     return () => {
       subscription?.remove();
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
     };
   }, []);
 
   return {
     startPaymentSession,
     endPaymentSession,
-    paymentSession
+    paymentSession,
+    alertData,
+    hideAlert,
+    handlePrimaryAction,
+    handleSecondaryAction,
+    isChecking
   };
 };

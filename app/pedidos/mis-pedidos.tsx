@@ -12,8 +12,47 @@ import {
   useColorScheme,
   View,
 } from 'react-native';
-import { apiRequest } from '../config/api';
-import { usePaymentStatusChecker } from '../hooks/usePaymentStatusChecker';
+// 🔧 IMPORTACIONES CORREGIDAS
+// Temporary apiRequest function until lib/api.ts exports are fixed
+const apiRequest = async (endpoint: string, options: {
+  method?: string;
+  token?: string;
+} = {}) => {
+  const { method = 'GET', token } = options;
+  
+  const url = `https://2667b7e4b7b2.ngrok-free.app${endpoint}`;
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'ngrok-skip-browser-warning': 'true',
+  };
+  
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
+  console.log('🌐 API Request:', { url, method, hasToken: !!token });
+  
+  const response = await fetch(url, { method, headers });
+  const data = await response.json();
+  
+  return { response, data };
+};
+
+/**
+ * 🛒 COMPONENTE: MisPedidosScreen
+ * 
+ * ¿QUÉ HACE?: Muestra la lista de pedidos del usuario autenticado
+ * 
+ * FLUJO COMPLETO:
+ * 1. Obtiene token del usuario desde AsyncStorage
+ * 2. Hace petición al backend: GET /api/orders con Authorization header
+ * 3. Backend usa auth.middleware.js para verificar token
+ * 4. Backend llama a orders.controller.js para obtener pedidos del usuario
+ * 5. Muestra los pedidos en una lista
+ * 
+ * CONEXIÓN EXACTA:
+ * mis-pedidos.tsx → lib/api.ts → Backend → auth.middleware.js → orders.controller.js → Base de datos
+ */
 
 interface Payment {
   id: number;
@@ -52,38 +91,63 @@ export default function MisPedidosScreen() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const { autoCheckPendingOrders } = usePaymentStatusChecker();
+  // Comentamos el hook que no existe
+  // const { autoCheckPendingOrders } = usePaymentStatusChecker();
 
+  /**
+   * 🔍 FUNCIÓN: fetchOrders
+   * 
+   * ¿QUÉ HACE?: Obtiene los pedidos del usuario autenticado desde el backend
+   * 
+   * FLUJO:
+   * 1. Obtiene token de AsyncStorage
+   * 2. Llama al endpoint /api/orders con autenticación
+   * 3. Backend verifica token y devuelve pedidos del usuario
+   */
   const fetchOrders = async () => {
     try {
       const token = await AsyncStorage.getItem('token');
       if (!token) {
-        router.push('/auth/login');
+        console.log('❌ No hay token, redirigiendo a login');
+        router.push('/');
         return;
       }
 
       console.log('🔍 Obteniendo lista de pedidos...');
 
+      // 🌐 PETICIÓN AL BACKEND CORREGIDA
+      // RUTA: https://tu-ngrok.app/api/orders
+      // MÉTODO: GET con Authorization header
       const { response, data } = await apiRequest('/api/orders', {
         method: 'GET',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        token: token, // Enviamos el token usando el parámetro token
       });
 
-      console.log('📡 Respuesta completa:', { status: response.status, data });
+      console.log('📡 Respuesta del backend:', { status: response.status, data });
 
-      if (response.ok && data && data.success) {
-        const ordersArray = data.orders || [];
+      if (response.ok && data) {
+        // 📦 PROCESAR RESPUESTA DEL BACKEND
+        // El backend debe devolver un array de órdenes o un objeto con órdenes
+        const ordersArray = Array.isArray(data) ? data : (data.orders || data.data || []);
         console.log('✅ Pedidos obtenidos:', ordersArray.length);
         console.log('📦 Órdenes:', ordersArray);
         setOrders(ordersArray);
       } else {
         console.error('❌ Error al obtener pedidos:', response.status, data);
+        
+        // Si es error 401 (no autorizado), limpiar sesión
+        if (response.status === 401) {
+          console.log('🔄 Token inválido, limpiando sesión...');
+          await AsyncStorage.multiRemove(['token', 'userRole', 'userData']);
+          router.push('/');
+          return;
+        }
+        
         setOrders([]);
       }
     } catch (error) {
-      console.error('Error al obtener pedidos:', error);
+      console.error('❌ Error de conexión al obtener pedidos:', error);
+      setOrders([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -94,13 +158,13 @@ export default function MisPedidosScreen() {
   useFocusEffect(
     useCallback(() => {
       console.log('🔄 Pantalla enfocada - Refrescando pedidos...');
-      fetchOrders().then(async () => {
-        // Verificar automáticamente órdenes pendientes después de cargar
-        console.log('🔄 Verificando órdenes pendientes automáticamente...');
-        await autoCheckPendingOrders();
-        // Recargar después de la verificación
-        await fetchOrders();
-      });
+      fetchOrders();
+      // Comentamos esto porque la función autoCheckPendingOrders no existe
+      // fetchOrders().then(async () => {
+      //   console.log('🔄 Verificando órdenes pendientes automáticamente...');
+      //   await autoCheckPendingOrders();
+      //   await fetchOrders();
+      // });
     }, [])
   );
 

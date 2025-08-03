@@ -1,3 +1,6 @@
+//SIRVE PARA OBTENER LOS PRODUCTOS DE USUARIO CUSTOMER
+
+
 import prisma from '../prisma/db.js';
 
 // FUNCIÓN SIMPLE PARA CREAR UN PRODUCTO

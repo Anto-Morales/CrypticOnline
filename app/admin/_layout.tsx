@@ -43,11 +43,11 @@ export default function AdminLayout() {
           ]);
         }
       } else {
-        router.push('/auth/login');
+        router.push('/');
       }
     } catch (error) {
       console.error('Error verificando acceso admin:', error);
-      router.push('/auth/login');
+      router.push('/');
     }
   };
 
@@ -177,9 +177,11 @@ export default function AdminLayout() {
               <TouchableOpacity
                 style={[styles.menuItem, { marginTop: 30, borderTopWidth: 1, borderTopColor: '#444' }]}
                 onPress={async () => {
+                  console.log('🚪 Admin cerrando sesión...');
                   await AsyncStorage.removeItem('token');
                   await AsyncStorage.removeItem('user');
-                  router.push('/auth/login');
+                  console.log('✅ Sesión admin cerrada, redirigiendo a pantalla principal');
+                  router.replace('/');
                 }}
               >
                 <Ionicons name="log-out-outline" size={24} color={themeColors.danger} />
@@ -246,10 +248,12 @@ export default function AdminLayout() {
                 <TouchableOpacity
                   style={[styles.mobileMenuItem, { marginTop: 20, borderTopWidth: 1, borderTopColor: '#444' }]}
                   onPress={async () => {
+                    console.log('🚪 Admin móvil cerrando sesión...');
                     await AsyncStorage.removeItem('token');
                     await AsyncStorage.removeItem('user');
                     setSidebarVisible(false);
-                    router.push('/auth/login');
+                    console.log('✅ Sesión admin cerrada, redirigiendo a pantalla principal');
+                    router.replace('/');
                   }}
                 >
                   <Ionicons name="log-out-outline" size={24} color={themeColors.danger} />

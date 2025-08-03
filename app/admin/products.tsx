@@ -1,20 +1,96 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
 import {
-    Alert,
-    Image,
-    Modal,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    useColorScheme,
-    useWindowDimensions,
-    View,
+  Alert,
+  Image,
+  Modal,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useColorScheme,
+  useWindowDimensions,
+  View,
 } from 'react-native';
-import { apiRequest } from '../config/api';
+// Create a simple API request function since apiRequest is not available
+const apiRequest = async (url: string, options: { method: string; body?: string }) => {
+  try {
+    // 🔧 HARDCODED URL PARA TESTING (temporal)
+    const HARDCODED_NGROK_URL = 'https://2667b7e4b7b2.ngrok-free.app';
+    
+    // 🔧 CONFIGURACIÓN DINÁMICA DE API URL
+    let baseUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+    
+    // 🌐 PRIORIZAR NGROK URL SI ESTÁ DISPONIBLE
+    if (process.env.EXPO_PUBLIC_NGROK_URL) {
+      baseUrl = process.env.EXPO_PUBLIC_NGROK_URL;
+      console.log('🔗 Usando NGROK URL desde env:', baseUrl);
+    } else {
+      // 🚨 FALLBACK A URL HARDCODEADA
+      baseUrl = HARDCODED_NGROK_URL;
+      console.log('⚠️ Variables de entorno no funcionan, usando URL hardcodeada:', baseUrl);
+    }
+    
+    // 🌐 DETECCIÓN DE PLATAFORMA Y CONFIGURACIÓN AUTOMÁTICA
+    if (typeof window !== 'undefined') {
+      // Estamos en web (navegador)
+      console.log('🌐 Ejecutándose en WEB');
+    } else {
+      // Estamos en móvil (React Native)
+      console.log('📱 Ejecutándose en MÓVIL');
+      
+      // 🏠 FALLBACK A IP LOCAL SI NO HAY NGROK
+      if (!process.env.EXPO_PUBLIC_NGROK_URL && !process.env.EXPO_PUBLIC_API_URL) {
+        console.log('⚠️ Sin variables de entorno, manteniendo URL hardcodeada');
+      }
+    }
+    
+    const fullUrl = `${baseUrl}${url}`;
+    console.log('🌐 API Request to:', fullUrl);
+    console.log('📱 Platform:', typeof window !== 'undefined' ? 'WEB' : 'MOBILE');
+    console.log('🔍 Env vars disponibles:', {
+      EXPO_PUBLIC_API_URL: process.env.EXPO_PUBLIC_API_URL,
+      EXPO_PUBLIC_NGROK_URL: process.env.EXPO_PUBLIC_NGROK_URL
+    });
+    
+    const response = await fetch(fullUrl, {
+      method: options.method,
+      headers: {
+        'Content-Type': 'application/json',
+        // 🔒 AGREGAR HEADERS PARA NGROK SI ES NECESARIO
+        ...(baseUrl.includes('ngrok') && { 
+          'ngrok-skip-browser-warning': 'true',
+          'User-Agent': 'CrypticOnline-Mobile-App'
+        }),
+      },
+      body: options.body,
+    });
+    
+    if (!response.ok) {
+      console.error('❌ Response not OK:', {
+        status: response.status,
+        statusText: response.statusText,
+        url: fullUrl
+      });
+    }
+    
+    const data = await response.json();
+    console.log('✅ API Response:', { status: response.status, hasData: !!data });
+    
+    return { response, data };
+  } catch (error) {
+    console.error('❌ API Request failed:', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      url,
+      baseUrl: typeof window !== 'undefined' ? 'WEB' : 'MOBILE',
+      fullUrl: `${process.env.EXPO_PUBLIC_NGROK_URL || process.env.EXPO_PUBLIC_API_URL || 'HARDCODED_URL'}${url}`,
+      errorType: error?.constructor?.name
+    });
+    throw error;
+  }
+};
 
 interface Product {
   id: number;
@@ -47,6 +123,14 @@ interface ProductStats {
 
 export default function AdminProducts() {
   console.log('🏷️ ADMIN PRODUCTS: Renderizando...');
+  
+  // 🔍 DEBUG: Verificar variables de entorno al iniciar
+  console.log('🔍 VARIABLES DE ENTORNO AL INICIAR:', {
+    EXPO_PUBLIC_API_URL: process.env.EXPO_PUBLIC_API_URL,
+    EXPO_PUBLIC_NGROK_URL: process.env.EXPO_PUBLIC_NGROK_URL,
+    NODE_ENV: process.env.NODE_ENV,
+    allEnvVars: Object.keys(process.env).filter(key => key.startsWith('EXPO_PUBLIC_'))
+  });
   
   const { width } = useWindowDimensions();
   const scheme = useColorScheme();
@@ -116,10 +200,22 @@ export default function AdminProducts() {
   const loadProducts = async () => {
     try {
       console.log('📦 Cargando productos...');
+      console.log('🌐 Variables de entorno:', {
+        EXPO_PUBLIC_API_URL: process.env.EXPO_PUBLIC_API_URL,
+        EXPO_PUBLIC_NGROK_URL: process.env.EXPO_PUBLIC_NGROK_URL,
+        Platform: typeof window !== 'undefined' ? 'WEB' : 'MOBILE'
+      });
       
       // Usar la API simple que ya funciona
       const { response, data } = await apiRequest('/api/simple-products', {
         method: 'GET',
+      });
+
+      console.log('📡 Response details:', {
+        ok: response.ok,
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries())
       });
 
       if (response.ok) {
@@ -141,12 +237,19 @@ export default function AdminProducts() {
         setProducts(adaptedProducts);
         console.log('✅ Productos cargados:', adaptedProducts.length);
       } else {
-        console.error('❌ Error cargando productos:', data.error);
-        Alert.alert('Error', 'No se pudieron cargar los productos');
+        console.error('❌ Error cargando productos:', {
+          status: response.status,
+          statusText: response.statusText,
+          data
+        });
+        Alert.alert('Error', `Error ${response.status}: ${data.error || response.statusText}`);
       }
     } catch (error) {
       console.error('❌ Error de red:', error);
-      Alert.alert('Error', 'Error de conexión al cargar productos');
+      Alert.alert(
+        'Error de Conexión', 
+        `No se pudo conectar con el servidor.\n\nError: ${error instanceof Error ? error.message : 'Unknown'}\n\nVerifica que el servidor esté corriendo y que tu dispositivo esté conectado a la misma red.`
+      );
     } finally {
       setLoading(false);
       setRefreshing(false);

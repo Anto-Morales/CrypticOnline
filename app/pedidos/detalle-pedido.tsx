@@ -2,18 +2,67 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
-    ActivityIndicator,
-    Image,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    useColorScheme,
-    View,
+  ActivityIndicator,
+  Alert,
+  Image,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  useColorScheme,
+  View,
 } from 'react-native';
-import { apiRequest } from '../config/api';
-import { usePaymentStatusChecker } from '../hooks/usePaymentStatusChecker';
+// 🎨 IMPORTAR ICONOS (solo los que necesitamos)
+import { MaterialIcons } from '@expo/vector-icons';
+
+/**
+ * 🔍 COMPONENTE: DetallePedidoScreen
+ * 
+ * ¿QUÉ HACE?: Muestra los detalles completos de un pedido específico
+ * 
+ * FLUJO COMPLETO:
+ * 1. Recibe orderId como parámetro de la URL
+ * 2. Hace petición al backend: GET /api/orders/{orderId} con token
+ * 3. Backend verifica autenticación y devuelve detalles del pedido
+ * 4. Muestra productos, estado de pago, total, etc.
+ * 5. Permite verificar estado de pago y actualizar manualmente
+ * 
+ * CONEXIÓN EXACTA:
+ * detalle-pedido.tsx → lib/api.ts → Backend → auth.middleware.js → orders.controller.js → Base de datos
+ */
+
+// 🔧 Función temporal de apiRequest hasta que se arregle lib/api.ts
+const apiRequest = async (endpoint: string, options: {
+  method?: string;
+  headers?: Record<string, string>;
+  body?: string;
+} = {}) => {
+  const { method = 'GET', headers = {}, body } = options;
+  
+  const url = `https://2667b7e4b7b2.ngrok-free.app${endpoint}`;
+  const defaultHeaders = {
+    'Content-Type': 'application/json',
+    'ngrok-skip-browser-warning': 'true',
+    ...headers,
+  };
+  
+  console.log('🌐 API Request:', { url, method, hasAuth: !!headers['Authorization'] });
+  
+  const config: RequestInit = {
+    method,
+    headers: defaultHeaders,
+  };
+  
+  if (body && method !== 'GET') {
+    config.body = body;
+  }
+  
+  const response = await fetch(url, config);
+  const data = await response.json();
+  
+  return { response, data };
+};
 
 interface OrderDetail {
   id: number;
@@ -46,31 +95,57 @@ export default function DetallePedidoScreen() {
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const { checkPaymentStatus, checking } = usePaymentStatusChecker();
+  const [checking, setChecking] = useState(false); // Estado para verificación de pago
 
+  /**
+   * 🔍 FUNCIÓN: fetchOrderDetail
+   * 
+   * ¿QUÉ HACE?: Obtiene los detalles completos de un pedido específico
+   * 
+   * FLUJO:
+   * 1. Obtiene token de AsyncStorage
+   * 2. Llama al endpoint /api/orders/{orderId} con autenticación
+   * 3. Backend verifica token y devuelve detalles completos del pedido
+   */
   const fetchOrderDetail = async () => {
     try {
       const token = await AsyncStorage.getItem('token');
       if (!token) {
-        router.push('/auth/login');
+        console.log('❌ No hay token, redirigiendo a login');
+        router.push('/');
         return;
       }
 
       console.log('🔍 Obteniendo detalles del pedido:', params.orderId);
 
+      // 🌐 PETICIÓN AL BACKEND PARA DETALLES DEL PEDIDO
+      // RUTA: https://tu-ngrok.app/api/orders/{orderId}
+      // MÉTODO: GET con Authorization header
       const { response, data } = await apiRequest(`/api/orders/${params.orderId}`, {
         method: 'GET',
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
-      if (response.ok) {
-        console.log('✅ Detalles del pedido obtenidos:', data.order.id);
-        setOrder(data.order);
+      console.log('📡 Respuesta del backend:', { status: response.status, data });
+
+      if (response.ok && data) {
+        // 📦 PROCESAR RESPUESTA DEL BACKEND
+        const orderData = data.order || data;
+        console.log('✅ Detalles del pedido obtenidos:', orderData.id);
+        setOrder(orderData);
       } else {
         console.error('❌ Error al obtener detalles:', response.status, data);
+        
+        // Si es error 401 (no autorizado), limpiar sesión
+        if (response.status === 401) {
+          console.log('🔄 Token inválido, limpiando sesión...');
+          await AsyncStorage.multiRemove(['token', 'userRole', 'userData']);
+          router.push('/');
+          return;
+        }
       }
     } catch (error) {
-      console.error('Error al obtener detalles del pedido:', error);
+      console.error('❌ Error de conexión al obtener detalles del pedido:', error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -91,6 +166,46 @@ export default function DetallePedidoScreen() {
     fetchOrderDetail();
   }, [params.orderId]);
 
+  /**
+   * 🔍 FUNCIÓN: checkPaymentStatus
+   * 
+   * ¿QUÉ HACE?: Verifica el estado actual del pago en MercadoPago
+   * 
+   * FLUJO:
+   * 1. Llama al backend para verificar estado del pago
+   * 2. Backend consulta la API de MercadoPago
+   * 3. Actualiza el estado del pedido si es necesario
+   */
+  const checkPaymentStatus = async (orderId: number): Promise<OrderDetail | null> => {
+    try {
+      setChecking(true);
+      const token = await AsyncStorage.getItem('token');
+      if (!token) return null;
+
+      console.log('🔄 Verificando estado de pago para pedido:', orderId);
+
+      // 🌐 PETICIÓN AL BACKEND PARA VERIFICAR PAGO
+      // RUTA: https://tu-ngrok.app/api/payments/check/{orderId}
+      const { response, data } = await apiRequest(`/api/payments/check/${orderId}`, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.ok && data) {
+        console.log('✅ Estado de pago verificado:', data);
+        return data.order || data;
+      } else {
+        console.error('❌ Error verificando pago:', response.status, data);
+        return null;
+      }
+    } catch (error) {
+      console.error('❌ Error verificando estado de pago:', error);
+      return null;
+    } finally {
+      setChecking(false);
+    }
+  };
+
   const handleCheckPayment = async () => {
     if (!order) return;
     
@@ -103,6 +218,16 @@ export default function DetallePedidoScreen() {
     }
   };
 
+  /**
+   * 🛠️ FUNCIÓN: handleManualUpdate
+   * 
+   * ¿QUÉ HACE?: Permite marcar manualmente un pedido como pagado (para testing)
+   * 
+   * FLUJO:
+   * 1. Llama al backend para actualizar estado manualmente
+   * 2. Backend marca el pedido como PAID
+   * 3. Actualiza la UI con el nuevo estado
+   */
   const handleManualUpdate = async () => {
     if (!order) return;
     
@@ -112,6 +237,8 @@ export default function DetallePedidoScreen() {
       const token = await AsyncStorage.getItem('token');
       if (!token) return;
 
+      // 🌐 PETICIÓN AL BACKEND PARA ACTUALIZAR MANUALMENTE
+      // RUTA: https://tu-ngrok.app/api/orders/manual/{orderId}
       const { response, data } = await apiRequest(`/api/orders/manual/${order.id}`, {
         method: 'PATCH',
         headers: {
@@ -129,6 +256,76 @@ export default function DetallePedidoScreen() {
       }
     } catch (error) {
       console.error('❌ Error en actualización manual:', error);
+    }
+  };
+
+  /**
+   * 💳 FUNCIÓN: handlePaymentMethod
+   * 
+   * ¿QUÉ HACE?: Redirige a la pantalla de pago con el método preseleccionado
+   * 
+   * FLUJO:
+   * 1. Toma el orderId existente y el método seleccionado
+   * 2. Redirige a la pantalla de pago con parámetros especiales
+   * 3. La pantalla de pago recibe estos parámetros y ejecuta directamente el método
+   * 4. Esto evita duplicar código y mantiene toda la lógica de pago centralizada
+   */
+  const handlePaymentMethod = (method: string) => {
+    if (!order) return;
+    
+    console.log('💳 Método de pago seleccionado:', method, 'para pedido:', order.id);
+    
+    // 🎯 REDIRIGIR A LA PANTALLA DE PAGO CORRECTA CON PARÁMETROS ESPECIALES
+    // La pantalla de pago recibirá estos parámetros y ejecutará directamente el método
+    router.push({
+      pathname: '/pago/pago', // 🔧 CORREGIDO: Redirigir a la pantalla de pago correcta
+      params: { 
+        // Datos del pedido existente
+        orderId: order.id,
+        total: order.total,
+        
+        // Parámetros especiales para indicar que es un retry
+        isRetry: 'true', // Indica que es un pago de pedido existente
+        selectedMethod: method, // Método preseleccionado por el usuario
+        autoExecute: 'true', // Indica que debe ejecutar automáticamente el pago
+        
+        // Datos adicionales por si se necesitan
+        orderItems: JSON.stringify(order.orderItems),
+        orderStatus: order.status
+      }
+    });
+  };
+
+  /**
+   * ❌ FUNCIÓN: handleCancelOrder
+   * 
+   * ¿QUÉ HACE?: Cancela el pedido pendiente
+   */
+  const handleCancelOrder = async () => {
+    if (!order) return;
+    
+    try {
+      console.log('❌ Cancelando pedido:', order.id);
+      
+      const token = await AsyncStorage.getItem('token');
+      if (!token) return;
+
+      const { response, data } = await apiRequest(`/api/orders/${order.id}/cancel`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok && data.success) {
+        console.log('✅ Pedido cancelado exitosamente');
+        setOrder({ ...order, status: 'CANCELLED' });
+      } else {
+        console.error('❌ Error cancelando pedido:', data);
+      }
+    } catch (error) {
+      console.error('❌ Error en cancelación:', error);
     }
   };
 
@@ -150,13 +347,13 @@ export default function DetallePedidoScreen() {
   const getStatusText = (status: string) => {
     switch (status) {
       case 'PAID':
-        return 'Pagado y Confirmado';
+        return 'Pagado y Confirmado ✅';
       case 'PENDING':
-        return 'Pago Pendiente';
+        return 'Pago Pendiente ⏳';
       case 'CANCELLED':
         return 'Cancelado';
       case 'FAILED':
-        return 'Pago Fallido';
+        return 'Pago Fallido ❌';
       default:
         return status;
     }
@@ -165,11 +362,11 @@ export default function DetallePedidoScreen() {
   const getPaymentStatusText = (status: string) => {
     switch (status) {
       case 'COMPLETED':
-        return 'Pago Completado ✅';
+        return 'Pago Completado';
       case 'PENDING':
-        return 'Pago Pendiente ⏳';
+        return 'Pago Pendiente ';
       case 'FAILED':
-        return 'Pago Fallido ❌';
+        return 'Pago Fallido ';
       default:
         return 'Sin información de pago';
     }
@@ -275,12 +472,12 @@ export default function DetallePedidoScreen() {
           </Text>
           <Text style={[styles.paymentInfo, { color: isDark ? '#ccc' : '#666' }]}>
             {order.status === 'PAID' 
-              ? 'Pago Completado ✅' 
+              ? 'Pago completado con éxito' 
               : order.payment 
                 ? getPaymentStatusText(order.payment.status) 
                 : order.status === 'PENDING' 
-                  ? 'Pago Pendiente ⏳'
-                  : 'Pago no procesado'
+                  ? 'Pago pendiente. \nSi ya has realizado el pago, dependiendo el metodo de pago puede tardar hasta 24 horas en reflejarse.'
+                  : 'Pago no procesado, por favor verifica tu método de pago o prueba con otro método.'
             }
           </Text>
           {(order.payment || order.status === 'PAID') && (
@@ -360,32 +557,227 @@ export default function DetallePedidoScreen() {
         {/* Acciones */}
         {order.status === 'PENDING' && (
           <View style={styles.actionsContainer}>
+            {/* Verificar estado actual */}
             <TouchableOpacity
               style={[styles.actionButton, { backgroundColor: '#009ee3' }]}
               onPress={handleCheckPayment}
               disabled={checking}
             >
               <Text style={styles.actionButtonText}>
-                {checking ? 'Verificando...' : 'Verificar Estado del Pago'}
+                {checking ? 'Verificando...' : ' Verificar Estado del Pago'}
               </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.actionButton, { backgroundColor: '#4CAF50', marginTop: 12 }]}
-              onPress={handleManualUpdate}
-            >
-              <Text style={styles.actionButtonText}>
-                ✅ Marcar como Pagado (Temporal)
+            {/* 💳 MÉTODOS DE PAGO REDISEÑADOS - MINIMALISTAS Y ELEGANTES */}
+            <View style={[styles.paymentSection, { backgroundColor: isDark ? '#1a1a1a' : '#f8f9fa' }]}>
+              <Text style={[styles.paymentSectionTitle, { color: isDark ? '#fff' : '#000' }]}>
+                Completa tu pago
               </Text>
-            </TouchableOpacity>
+              <Text style={[styles.paymentSectionSubtitle, { color: isDark ? '#ccc' : '#666' }]}>
+                Selecciona tu método preferido
+              </Text>
+
+              {/* Lista minimalista de métodos de pago */}
+              <View style={styles.paymentList}>
+                
+                {/* Tarjetas de Crédito/Débito - Opción principal */}
+                <TouchableOpacity
+                  style={[styles.paymentOption, styles.paymentOptionPrimary, { 
+                    backgroundColor: isDark ? '#0d2818' : '#f0fff4',
+                    borderColor: '#52c41a'
+                  }]}
+                  onPress={() => handlePaymentMethod('card')}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.paymentOptionLeft}>
+                    <View style={[styles.paymentIcon, styles.paymentIconLarge, { backgroundColor: '#52c41a' }]}>
+                      <MaterialIcons name="credit-card" size={28} color="#fff" />
+                    </View>
+                    <View style={styles.paymentInfo}>
+                      <Text style={[styles.paymentName, { color: isDark ? '#fff' : '#135200' }]}>
+                        Tarjeta de Crédito/Débito
+                      </Text>
+                      <Text style={[styles.paymentDescription, { color: isDark ? '#95de64' : '#389e0d' }]}>
+                        Pago directo y seguro
+                      </Text>
+                      {/* Logos de tarjetas aceptadas */}
+                      <View style={styles.cardLogosContainer}>
+                        <Image 
+                          source={require('../../assets/images/payment-icons/visa.png')} 
+                          style={styles.cardLogo}
+                        />
+                        <Image 
+                          source={require('../../assets/images/payment-icons/mastercard.png')} 
+                          style={styles.cardLogo}
+                        />
+                        <Image 
+                          source={require('../../assets/images/payment-icons/amex.png')} 
+                          style={styles.cardLogo}
+                        />
+                      </View>
+                    </View>
+                  </View>
+                  <View style={[styles.paymentBadge, { backgroundColor: '#52c41a' }]}>
+                    <Text style={styles.paymentBadgeText}>Más popular</Text>
+                  </View>
+                </TouchableOpacity>
+
+                {/* MercadoPago */}
+                <TouchableOpacity
+                  style={[styles.paymentOption, { 
+                    backgroundColor: isDark ? '#003d5c' : '#e6f7ff',
+                    borderColor: '#1890ff'
+                  }]}
+                  onPress={() => handlePaymentMethod('mercadopago')}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.paymentOptionLeft}>
+                    <View style={[styles.paymentIcon, { backgroundColor: '#1890ff' }]}>
+                      <Image 
+                        source={require('../../assets/images/payment-icons/mercadopago.png')} 
+                        style={styles.paymentIconImage}
+                      />
+                    </View>
+                    <View style={styles.paymentInfo}>
+                      <Text style={[styles.paymentName, { color: isDark ? '#fff' : '#001d66' }]}>
+                        MercadoPago
+                      </Text>
+                      <Text style={[styles.paymentDescription, { color: isDark ? '#91d5ff' : '#0050b3' }]}>
+                        Todas las opciones de pago
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={[styles.paymentArrow, { color: isDark ? '#1890ff' : '#0050b3' }]}>→</Text>
+                </TouchableOpacity>
+
+                {/* Transferencia Bancaria */}
+                <TouchableOpacity
+                  style={[styles.paymentOption, { 
+                    backgroundColor: isDark ? '#162312' : '#f6ffed',
+                    borderColor: isDark ? '#274916' : '#b7eb8f'
+                  }]}
+                  onPress={() => handlePaymentMethod('transfer')}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.paymentOptionLeft}>
+                    <View style={[styles.paymentIcon, { backgroundColor: '#52c41a' }]}>
+                      <MaterialIcons name="account-balance" size={24} color="#fff" />
+                    </View>
+                    <View style={styles.paymentInfo}>
+                      <Text style={[styles.paymentName, { color: isDark ? '#fff' : '#135200' }]}>
+                        Transferencia SPEI
+                      </Text>
+                      <Text style={[styles.paymentDescription, { color: isDark ? '#95de64' : '#389e0d' }]}>
+                        Sin comisiones • Confirmación inmediata
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={[styles.paymentArrow, { color: isDark ? '#52c41a' : '#389e0d' }]}>→</Text>
+                </TouchableOpacity>
+
+                {/* OXXO */}
+                <TouchableOpacity
+                  style={[styles.paymentOption, { 
+                    backgroundColor: isDark ? '#2a1215' : '#fff0f6',
+                    borderColor: isDark ? '#531dab' : '#efdbff'
+                  }]}
+                  onPress={() => handlePaymentMethod('oxxo')}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.paymentOptionLeft}>
+                    <View style={[styles.paymentIcon, { backgroundColor: '#eb2f96' }]}>
+                      <Image 
+                        source={require('../../assets/images/payment-icons/oxxo.png')} 
+                        style={styles.paymentIconImage}
+                      />
+                    </View>
+                    <View style={styles.paymentInfo}>
+                      <Text style={[styles.paymentName, { color: isDark ? '#fff' : '#780650' }]}>
+                        OXXO
+                      </Text>
+                      <Text style={[styles.paymentDescription, { color: isDark ? '#ffadd6' : '#c41d7f' }]}>
+                        Efectivo • +20,000 tiendas
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={[styles.paymentArrow, { color: isDark ? '#eb2f96' : '#c41d7f' }]}>→</Text>
+                </TouchableOpacity>
+
+                {/* PayPal */}
+                <TouchableOpacity
+                  style={[styles.paymentOption, { 
+                    backgroundColor: isDark ? '#111a2c' : '#f0f5ff',
+                    borderColor: isDark ? '#1d39c4' : '#adc6ff'
+                  }]}
+                  onPress={() => handlePaymentMethod('paypal')}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.paymentOptionLeft}>
+                    <View style={[styles.paymentIcon, { backgroundColor: '#2f54eb' }]}>
+                      <Image 
+                        source={require('../../assets/images/payment-icons/paypal.png')} 
+                        style={styles.paymentIconImage}
+                      />
+                    </View>
+                    <View style={styles.paymentInfo}>
+                      <Text style={[styles.paymentName, { color: isDark ? '#fff' : '#10239e' }]}>
+                        PayPal
+                      </Text>
+                      <Text style={[styles.paymentDescription, { color: isDark ? '#85a5ff' : '#2f54eb' }]}>
+                        Internacional • Protección del comprador
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={[styles.paymentArrow, { color: isDark ? '#2f54eb' : '#2f54eb' }]}>→</Text>
+                </TouchableOpacity>
+
+                {/* Criptomonedas */}
+                <TouchableOpacity
+                  style={[styles.paymentOption, { 
+                    backgroundColor: isDark ? '#2b1d11' : '#fffbe6',
+                    borderColor: isDark ? '#613400' : '#ffe58f'
+                  }]}
+                  onPress={() => handlePaymentMethod('crypto')}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.paymentOptionLeft}>
+                    <View style={[styles.paymentIcon, { backgroundColor: '#fa8c16' }]}>
+                      <Image 
+                        source={require('../../assets/images/payment-icons/bitcoin.png')} 
+                        style={styles.paymentIconImage}
+                      />
+                    </View>
+                    <View style={styles.paymentInfo}>
+                      <Text style={[styles.paymentName, { color: isDark ? '#fff' : '#874d00' }]}>
+                        Criptomonedas
+                      </Text>
+                      <Text style={[styles.paymentDescription, { color: isDark ? '#ffd666' : '#d46b08' }]}>
+                        Bitcoin, USDT, Ethereum
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={[styles.paymentArrow, { color: isDark ? '#fa8c16' : '#d46b08' }]}>→</Text>
+                </TouchableOpacity>
+
+              </View>
+
+              {/* Footer de seguridad */}
+              <View style={styles.securityFooter}>
+                <Text style={styles.securityIcon}></Text>
+                <Text style={[styles.securityFooterText, { color: isDark ? '#8c8c8c' : '#595959' }]}>
+                  Pagos protegidos con SSL 256-bit
+                </Text>
+              </View>
+            </View>
             
+            {/* Cancelar pedido */}
             <TouchableOpacity
-              style={[styles.actionButton, { backgroundColor: '#f44336', marginTop: 12 }]}
-              onPress={() => {
-                console.log('Cancelar pedido');
-              }}
+              style={[styles.cancelOrderButton, { borderColor: '#ff4d4f' }]}
+              onPress={() => handleCancelOrder()}
             >
-              <Text style={styles.actionButtonText}>Cancelar Pedido</Text>
+              <Text style={[styles.cancelOrderText, { color: '#ff4d4f' }]}>
+                Cancelar pedido
+              </Text>
             </TouchableOpacity>
           </View>
         )}
@@ -452,10 +844,6 @@ const styles = StyleSheet.create({
   statusDate: {
     fontSize: 14,
     marginBottom: 4,
-  },
-  paymentInfo: {
-    fontSize: 16,
-    marginBottom: 8,
   },
   paymentMethod: {
     fontSize: 14,
@@ -543,5 +931,301 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  
+  // 💳 ESTILOS PARA MÉTODOS DE PAGO PROFESIONALES Y MODERNOS
+  paymentMethodsTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginTop: 32,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  paymentMethodsSubtitle: {
+    fontSize: 16,
+    marginBottom: 24,
+    textAlign: 'center',
+    opacity: 0.8,
+  },
+  
+  // Grid moderno para métodos de pago
+  paymentGrid: {
+    gap: 16,
+    marginBottom: 24,
+  },
+  
+  // Card elegante para cada método de pago
+  paymentCard: {
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 2,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
+    elevation: 8,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  
+  // Icono circular del método de pago
+  paymentCardIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  
+  // Imagen dentro del icono
+  paymentCardImage: {
+    width: 32,
+    height: 32,
+    resizeMode: 'contain',
+  },
+  
+  // Título del método de pago
+  paymentCardTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  
+  // Descripción del método
+  paymentCardDesc: {
+    fontSize: 14,
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  
+  // Badge con beneficio
+  paymentCardBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  
+  paymentCardBadgeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  
+  // Sección de seguridad
+  securitySection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 12,
+    marginTop: 16,
+    marginBottom: 24,
+  },
+  
+  securityText: {
+    fontSize: 14,
+    marginLeft: 12,
+    flex: 1,
+    lineHeight: 20,
+  },
+  
+  // Botón de cancelar rediseñado
+  cancelButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    marginTop: 16,
+    backgroundColor: 'transparent',
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginLeft: 8,
+  },
+  
+  // ✨ ESTILOS PARA MÉTODOS DE PAGO MINIMALISTAS Y PROFESIONALES
+  paymentSection: {
+    padding: 20,
+    borderRadius: 16,
+    marginTop: 20,
+    marginBottom: 10,
+  },
+  paymentSectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  paymentSectionSubtitle: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 24,
+    opacity: 0.8,
+  },
+  paymentList: {
+    gap: 12,
+  },
+  
+  // Estilo para cada opción de pago
+  paymentOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  paymentOptionPrimary: {
+    borderWidth: 2,
+    shadowOpacity: 0.15,
+    elevation: 5,
+  },
+  paymentOptionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  
+  // Icono circular
+  paymentIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  // Icono más grande para MercadoPago (destacado)
+  paymentIconLarge: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+  },
+  
+  // Imágenes dentro de los iconos
+  paymentIconImage: {
+    width: 24,
+    height: 24,
+    resizeMode: 'contain',
+  },
+  
+  // Imagen más grande para MercadoPago
+  paymentIconImageLarge: {
+    width: 30,
+    height: 30,
+    resizeMode: 'contain',
+  },
+  
+  // Información del método
+  paymentInfo: {
+    flex: 1,
+    textAlign: 'justify',
+  },
+  paymentName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  paymentDescription: {
+    fontSize: 14,
+    lineHeight: 18,
+  },
+  
+  // 💳 Contenedor y estilos para logos de tarjetas
+  cardLogosContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    gap: 8,
+  },
+  cardLogo: {
+    width: 32,
+    height: 20,
+    resizeMode: 'contain',
+    borderRadius: 4,
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  
+  // Badge y flecha
+  paymentBadge: {
+    backgroundColor: '#1890ff',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  paymentBadgeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  paymentArrow: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginRight: 4,
+  },
+  
+  // Footer de seguridad
+  securityFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 20,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#e8e8e8',
+  },
+  securityIcon: {
+    fontSize: 16,
+    marginRight: 8,
+  },
+  securityFooterText: {
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  
+  // Botón de cancelar pedido
+  cancelOrderButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    marginTop: 16,
+    marginBottom: 32,
+    backgroundColor: 'transparent',
+  },
+  cancelOrderText: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 4,
   },
 });

@@ -10,7 +10,6 @@ import {
   useColorScheme,
   View,
 } from 'react-native';
-import { API_CONFIG, apiRequest } from '../config/api';
 
 export default function PerfilProfesionalScreen() {
   const router = useRouter();
@@ -48,20 +47,29 @@ export default function PerfilProfesionalScreen() {
       console.log('🔍 Token encontrado:', token ? 'SÍ' : 'NO');
       
       if (!token) {
-        console.log('❌ No token found, redirecting to login');
-        router.push('/auth/login');
+        console.log('❌ No token found, redirecting to main screen');
+        router.push('/');
         return;
       }
 
-      console.log('📡 Fetching user profile...');
-      console.log('🌐 URL:', `${API_CONFIG.getBaseURL()}${API_CONFIG.endpoints.profile}`);
+      // 🔧 USAR LA MISMA URL QUE FUNCIONA EN LOGIN
+      const HARDCODED_NGROK_URL = 'https://2667b7e4b7b2.ngrok-free.app';
+      const profileUrl = `${HARDCODED_NGROK_URL}/api/auth/profile`;
 
-      const { response, data } = await apiRequest(API_CONFIG.endpoints.profile, {
+      console.log('📡 Fetching user profile...');
+      console.log('🌐 URL:', profileUrl);
+
+      const response = await fetch(profileUrl, {
         method: 'GET',
         headers: {
-          Authorization: `Bearer ${token}`,
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true',
+          'User-Agent': 'CrypticOnline-Mobile-App',
         },
       });
+      
+      const data = await response.json();
 
       console.log('📡 Response status:', response.status);
       console.log('📦 Response data:', JSON.stringify(data, null, 2));
@@ -71,10 +79,10 @@ export default function PerfilProfesionalScreen() {
         setUser(data.user);
       } else if (response.status === 401) {
         // Token inválido o expirado
-        console.log('❌ Token invalid, removing and redirecting to login');
+        console.log('❌ Token invalid, removing and redirecting to main screen');
         await AsyncStorage.removeItem('token');
         await AsyncStorage.removeItem('user');
-        router.push('/auth/login');
+        router.push('/');
       } else {
         console.error('❌ Error fetching profile:', response.status, data);
         // Intentar cargar usuario guardado localmente como fallback
@@ -113,12 +121,12 @@ export default function PerfilProfesionalScreen() {
       
       console.log('✅ Sesión cerrada completamente');
       
-      // Redirigir al login de inicio (fuera de las tabs)
-      router.replace('/auth/login');
+      // Redirigir a la pantalla principal (index.tsx)
+      router.replace('/');
     } catch (error) {
       console.error('❌ Error al cerrar sesión:', error);
       // Incluso si hay error, intentar redirigir
-      router.replace('/auth/login');
+      router.replace('/');
     }
   };
 

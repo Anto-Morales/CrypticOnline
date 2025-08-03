@@ -67,18 +67,51 @@ const CartScreen: React.FC = () => {
   };
 
   const handleComprarCarrito = () => {
+    // 🚚 CALCULAR DATOS DE ENVÍO
+    const shippingCost = 50; // TODO: Integrar con API de envíos
+    const subtotal = totalProductsPrice;
+    const totalWithShipping = subtotal + shippingCost;
+    
+    console.log('🛒 COMPRA DE CARRITO - Datos enviados:', {
+      totalProducts,
+      subtotal,
+      shippingCost,
+      totalWithShipping,
+      items: carrito.items
+    });
+    
     // Enviamos los productos del carrito como parámetro
     router.push({
       pathname: '/pago/pago',
       params: {
+        // 🛒 IDENTIFICADOR DE COMPRA
+        productoId: 'carrito',
+        
+        // 🚚 DATOS DE ENVÍO (UNIFICADOS)
+        shippingCost: shippingCost.toString(),
+        subtotal: subtotal.toString(),
+        total: totalWithShipping.toString(),
+        
+        // 📦 ITEMS DEL CARRITO
         cartItems: JSON.stringify(
           carrito.items.map((item) => ({
             title: item.title,
             quantity: item.quantity,
             unit_price: item.unit_price,
+            id: item.id,
+            talla: item.talla,
+            productId: parseInt(item.id),
           }))
         ),
-        productoId: 'carrito',
+        
+        // 🚚 METADATOS PARA FUTURA API DE ENVÍOS
+        shippingData: JSON.stringify({
+          method: 'standard', // standard, express, premium
+          cost: shippingCost,
+          estimatedDays: '3-5',
+          provider: 'default', // fedex, dhl, ups, etc.
+          // TODO: Agregar dirección, peso total, dimensiones
+        }),
       },
     });
   };

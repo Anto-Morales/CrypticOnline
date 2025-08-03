@@ -13,7 +13,34 @@ import {
   useColorScheme,
   View
 } from 'react-native';
-import { apiRequest } from '../config/api';
+export const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
+  // 🔧 HARDCODED URL PARA QUE FUNCIONE (igual que en index.tsx)
+  const HARDCODED_NGROK_URL = 'https://2667b7e4b7b2.ngrok-free.app';
+  
+  try {
+    const fullUrl = `${HARDCODED_NGROK_URL}${endpoint}`;
+    console.log('🛍️ API Request desde inicio a:', fullUrl);
+    
+    const response = await fetch(fullUrl, {
+      headers: {
+        'Content-Type': 'application/json',
+        // 🔒 HEADERS PARA NGROK
+        'ngrok-skip-browser-warning': 'true',
+        'User-Agent': 'CrypticOnline-Mobile-App',
+        ...options.headers,
+      },
+      ...options,
+    });
+
+    const data = await response.json();
+    console.log('📡 Response desde inicio:', { status: response.status, ok: response.ok });
+    
+    return { response, data };
+  } catch (error) {
+    console.error('❌ API Request Error desde inicio:', error);
+    throw error;
+  }
+};
 
 // Interfaces
 interface Product {
@@ -41,22 +68,38 @@ const HomeScreen = () => {
 
   // Cargar productos reales al iniciar
   useEffect(() => {
-    loadProducts();
+    // Añadir un pequeño delay para evitar problemas de timing
+    const timer = setTimeout(() => {
+      loadProducts();
+    }, 1000); // 1 segundo de delay
+    
+    return () => clearTimeout(timer);
   }, []);
 
   const loadProducts = async () => {
     try {
       console.log('🛍️ Cargando productos para la tienda...');
+      console.log('🔍 Usando la misma URL que funcionó en login: https://2667b7e4b7b2.ngrok-free.app');
       
+      // 📝 NOTA: Usando /api/simple-products porque funciona para ambas pantallas
+      // TODO: Investigar por qué /api/products no funciona (cuando tengamos tiempo)
       const { response, data } = await apiRequest('/api/simple-products', {
         method: 'GET',
       });
+
+      console.log('📡 Response completa desde inicio:', {
+        ok: response.ok,
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries())
+      });
+      console.log('📦 Data recibida desde inicio:', data);
 
       if (response.ok && data.products) {
         // Filtrar solo productos con stock disponible
         const availableProducts = data.products.filter((product: Product) => product.stock > 0);
         
-        console.log(`✅ ${availableProducts.length} productos disponibles cargados`);
+        console.log(`✅ ${availableProducts.length} productos disponibles cargados en inicio`);
         
         // Separar productos: los más recientes y los destacados
         const recentProducts = availableProducts.slice(0, 6); // Primeros 6 para "LO ÚLTIMO"
@@ -65,13 +108,20 @@ const HomeScreen = () => {
         setProducts(recentProducts);
         setFeaturedProducts(topProducts);
       } else {
-        console.error('❌ Error cargando productos:', data.error);
+        console.error('❌ Error cargando productos desde inicio:', {
+          status: response.status,
+          statusText: response.statusText,
+          data
+        });
         // Mantener productos de ejemplo si hay error
         setProducts([]);
         setFeaturedProducts([]);
       }
     } catch (error) {
-      console.error('❌ Error de conexión:', error);
+      console.error('❌ Error de conexión desde inicio:', error);
+      console.error('❌ Tipo de error:', error?.constructor?.name);
+      console.error('❌ Mensaje de error:', error instanceof Error ? error.message : 'Unknown');
+      
       // Mantener productos de ejemplo si hay error de conexión
     } finally {
       setLoading(false);
@@ -109,6 +159,13 @@ const HomeScreen = () => {
   };
 
   const navigateToProductDetail = (product: Product) => {
+    console.log('🔍 Navegando al producto:', {
+      id: product.id,
+      name: product.name,
+      price: product.price,
+      imageUrl: product.imageUrl
+    });
+    
     router.push({
       pathname: '/producto/producto-detalle',
       params: {
@@ -116,7 +173,7 @@ const HomeScreen = () => {
         name: product.name,
         price: product.price.toString(),
         description: product.description,
-        imageUrl: product.imageUrl,
+        image: product.imageUrl, // 📸 PASAR IMAGEN CORRECTAMENTE
         stock: product.stock.toString()
       },
     });
@@ -169,6 +226,19 @@ const HomeScreen = () => {
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#fff" />
             <Text style={styles.loadingText}>Cargando productos...</Text>
+          </View>
+        ) : products.length === 0 ? (
+          <View style={styles.loadingContainer}>
+            <Text style={styles.loadingText}>No se pudieron cargar los productos</Text>
+            <TouchableOpacity 
+              style={styles.retryButton}
+              onPress={() => {
+                setLoading(true);
+                loadProducts();
+              }}
+            >
+              <Text style={styles.retryButtonText}>Reintentar</Text>
+            </TouchableOpacity>
           </View>
         ) : (
           <FlatList
@@ -414,6 +484,18 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     marginTop: 10,
+  },
+  retryButton: {
+    backgroundColor: '#007bff',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    marginTop: 15,
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
 

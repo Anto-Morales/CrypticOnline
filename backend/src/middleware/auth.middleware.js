@@ -134,7 +134,7 @@ export const adminMiddleware = async (req, res, next) => {
     // Primero verificar autenticación
     await authMiddleware(req, res, () => {
       // Verificar que el usuario sea admin
-      if (req.user && req.user.role === 'admin') {
+      if (req.user && req.user.role === 'ADMIN') {
         console.log('✅ Usuario admin verificado:', req.user.email);
         next();
       } else {

@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert } from 'react-native';
-import { apiRequest } from '../config/api';
+import { api } from '../config/api';
 
 export interface PaymentNotification {
   show: boolean;
@@ -30,7 +30,7 @@ export const usePaymentNotifications = () => {
 
       // Si tenemos orderId, consultamos directamente
       if (orderId && orderId !== 'carrito') {
-        const { response, data } = await apiRequest(`/api/orders/${orderId}`, {
+        const { response, data } = await api(`/api/orders/${orderId}`, {
           method: 'GET',
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -42,7 +42,7 @@ export const usePaymentNotifications = () => {
 
       // Si tenemos preferenceId, buscamos por preference
       if (preferenceId) {
-        const { response, data } = await apiRequest(`/api/orders/by-preference/${preferenceId}`, {
+        const { response, data } = await api(`/api/orders/by-preference/${preferenceId}`, {
           method: 'GET',
           headers: { 'Authorization': `Bearer ${token}` }
         });

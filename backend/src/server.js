@@ -94,8 +94,4 @@ app.listen(PORT, () => {
   console.log(`🚀 Servidor CrypticOnline iniciado`);
   console.log(`📍 Puerto: ${PORT}`);
   console.log(`🌐 URL: http://localhost:${PORT}`);
-  console.log('🧪 ===================================');
-  console.log('🧪 Para poblar productos:');
-  console.log(`   curl -X POST http://localhost:${PORT}/api/products/seed`);
-  console.log('🧪 ===================================');
 });

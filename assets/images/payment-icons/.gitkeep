@@ -1,0 +1,2 @@
+# Esta carpeta contiene iconos de métodos de pago
+# Se crea para evitar errores ENOENT en Metro bundler

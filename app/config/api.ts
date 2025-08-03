@@ -1,62 +1,40 @@
-import { Platform } from 'react-native';
+// app/config/api.ts
+// Configuración centralizada de la API
 
-// Configuración de URLs para diferentes entornos
+// URL base del servidor - Actualiza esta URL cuando cambies ngrok
 export const API_CONFIG = {
-  // URL base del servidor
-  getBaseURL: () => {
-    if (__DEV__) {
-      // Desarrollo
-      if (Platform.OS === 'web') {
-        return 'http://localhost:3000';
-      } else {
-        // Para móvil - cambiar esta IP por la de tu computadora
-        return 'http://192.168.0.108:3000';
-      }
-    } else {
-      // Producción
-      return 'https://tu-servidor-produccion.com';
-    }
+  // URL actual de ngrok - actualiza cuando reinicies ngrok
+  BASE_URL: 'https://2667b7e4b7b2.ngrok-free.app',
+
+  // Headers comunes para todas las peticiones
+  DEFAULT_HEADERS: {
+    'Content-Type': 'application/json',
+    'ngrok-skip-browser-warning': 'true', // Necesario para ngrok
   },
 
   // Endpoints específicos
-  endpoints: {
-    login: '/api/auth/login',
-    profile: '/api/auth/profile',
-    verify: '/api/auth/verify',
-    orders: '/api/orders',
-    notifications: '/api/notifications',
-    payments: '/api/payments',
+  ENDPOINTS: {
+    HEALTH: '/health',
+    ORDERS: '/api/orders',
+    PAYMENTS_CREATE: '/api/payments/create',
+    SIMPLE_PRODUCTS: '/api/simple-products',
+    AUTH_LOGIN: '/api/auth/login',
+    AUTH_PROFILE: '/api/auth/profile',
   },
 };
 
-// Función helper para hacer requests
-export const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
-  const baseURL = API_CONFIG.getBaseURL();
-  const url = `${baseURL}${endpoint}`;
+// Función helper para crear URLs completas
+export const createApiUrl = (endpoint: string): string => {
+  return `${API_CONFIG.BASE_URL}${endpoint}`;
+};
 
-  const defaultHeaders = {
-    'Content-Type': 'application/json',
-  };
-
-  const config = {
-    ...options,
-    headers: {
-      ...defaultHeaders,
-      ...options.headers,
-    },
-  };
-
-  console.log(`[API] ${config.method || 'GET'} ${url}`);
-
-  try {
-    const response = await fetch(url, config);
-    const data = await response.json();
-
-    console.log(`[API] Response ${response.status}:`, data);
-
-    return { response, data };
-  } catch (error) {
-    console.error(`[API] Error calling ${url}:`, error);
-    throw error;
+// Función helper para crear headers con autenticación
+export const createAuthHeaders = (token: string | null = null): Record<string, string> => {
+  const headers: Record<string, string> = { ...API_CONFIG.DEFAULT_HEADERS };
+  
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
   }
+  
+  return headers;
 };

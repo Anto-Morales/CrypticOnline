@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useRouter } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
@@ -15,7 +15,35 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { API_CONFIG, apiRequest } from './config/api';
+
+// 🔧 API REQUEST FUNCTION WITH HARDCODED URL (temporal)
+const apiRequest = async (url: string, options: RequestInit = {}) => {
+  try {
+    // 🔧 HARDCODED URL PARA QUE FUNCIONE
+    const HARDCODED_NGROK_URL = 'https://2667b7e4b7b2.ngrok-free.app';
+    
+    const fullUrl = `${HARDCODED_NGROK_URL}${url}`;
+    console.log('🌐 API Request to:', fullUrl);
+    
+    const response = await fetch(fullUrl, {
+      headers: {
+        'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true',
+        'User-Agent': 'CrypticOnline-Mobile-App',
+        ...options.headers,
+      },
+      ...options,
+    });
+    
+    const data = await response.json();
+    console.log('📡 Response:', { status: response.status, ok: response.ok });
+    
+    return { response, data };
+  } catch (error) {
+    console.error('❌ API Request failed:', error);
+    throw error;
+  }
+};
 
 const IndexLoginScreen: React.FC = () => {
   const router = useRouter();
@@ -38,8 +66,40 @@ const IndexLoginScreen: React.FC = () => {
     const checkExistingSession = async () => {
       try {
         const token = await AsyncStorage.getItem('token');
-        if (token) {
-          console.log('✅ Sesión existente encontrada, navegando a inicio...');
+        const userDataString = await AsyncStorage.getItem('user');
+        
+        if (token && userDataString) {
+          console.log('✅ Sesión existente encontrada, verificando rol...');
+          
+          try {
+            const userData = JSON.parse(userDataString);
+            const userRole = (userData?.role || '').toUpperCase();
+            const isAdmin = userRole === 'ADMIN' || userData?.id === 1;
+            
+            console.log('🔍 Usuario en sesión:', {
+              email: userData?.email,
+              role: userRole,
+              id: userData?.id,
+              isAdmin
+            });
+            
+            // Navegar según el rol
+            if (isAdmin) {
+              console.log('🛡️ Navegando a dashboard de admin...');
+              router.replace('/admin/dashboard');
+            } else {
+              console.log('👤 Navegando a inicio de usuario...');
+              router.replace('/(tabs)/inicio');
+            }
+            return;
+          } catch (parseError) {
+            console.log('⚠️ Error parseando datos de usuario, navegando a inicio por defecto...');
+            router.replace('/(tabs)/inicio');
+            return;
+          }
+        } else if (token) {
+          // Solo hay token pero no datos de usuario
+          console.log('⚠️ Token sin datos de usuario, navegando a inicio por defecto...');
           router.replace('/(tabs)/inicio');
           return;
         }
@@ -127,9 +187,10 @@ const IndexLoginScreen: React.FC = () => {
     setIsSubmitting(true);
 
     try {
-      console.log('🔑 Iniciando login desde index...');
+      console.log('� Intentando login con:', email);
+      console.log('🌐 Enviando a /api/auth/login');
 
-      const { response, data } = await apiRequest(API_CONFIG.endpoints.login, {
+      const { response, data } = await apiRequest('/api/auth/login', {
         method: 'POST',
         body: JSON.stringify({
           email: email.toLowerCase().trim(),
@@ -137,20 +198,144 @@ const IndexLoginScreen: React.FC = () => {
         }),
       });
 
-      if (response.ok && data.token) {
-        await AsyncStorage.setItem('token', data.token);
-        console.log('✅ Token guardado, navegando a inicio...');
+      console.log('📡 Status de respuesta:', response.status);
+      console.log('📦 Datos completos recibidos:', JSON.stringify(data, null, 2));
 
-        // Navegación al inicio de la app
-        router.replace('/(tabs)/inicio');
+      if (response.ok && data.token) {
+        console.log('✅ Login exitoso, guardando token...');
+
+        // Guardar token
+        await AsyncStorage.setItem('token', data.token);
+        console.log('💾 Token guardado:', data.token.substring(0, 20) + '...');
+
+        // Guardar datos del usuario si están disponibles
+        if (data.user) {
+          await AsyncStorage.setItem('user', JSON.stringify(data.user));
+          console.log('👤 Usuario guardado:', data.user.email);
+        }
+
+        // Verificar que se guardó correctamente
+        const savedToken = await AsyncStorage.getItem('token');
+        console.log('🔍 Token verificado en storage:', savedToken ? 'SÍ' : 'NO');
+
+        // 🎯 NAVEGACIÓN MEJORADA CON DETECCIÓN DE ADMINISTRADORES
+        try {
+          console.log('🔀 Iniciando navegación...');
+          console.log('📍 Rol del usuario:', data.user?.role);
+          
+          // Normalizar rol para comparación
+          const userRole = (data.user?.role || '').toUpperCase();
+          console.log('🔍 Rol normalizado:', userRole);
+          
+          // Decidir ruta según el rol
+          let targetRoute: any = '/(tabs)/inicio'; // Default para usuarios normales
+          
+          // Detectar si es administrador de cualquiera de estas formas:
+          // 1. Rol explícitamente 'ADMIN'
+          // 2. ID igual a 1 (admin principal)
+          // 3. Rol 'admin' en minúsculas
+          const isAdmin = userRole === 'ADMIN' || 
+                         data.user?.id === 1 || 
+                         userRole === 'admin'.toUpperCase();
+          
+          if (isAdmin) {
+            targetRoute = '/admin/dashboard'; // Para administradores
+            console.log('🛡️ Usuario administrador detectado:', {
+              userRole,
+              userId: data.user?.id,
+              isAdminByRole: userRole === 'ADMIN',
+              isAdminById: data.user?.id === 1,
+              finalIsAdmin: isAdmin
+            });
+          } else {
+            console.log('👤 Usuario normal detectado:', {
+              userRole,
+              userId: data.user?.id,
+              targetRoute
+            });
+          }
+          
+          console.log('📍 Ruta objetivo:', targetRoute);
+          console.log('🔀 Navegando a:', targetRoute);
+          
+          // Intentar navegación
+          router.replace(targetRoute);
+          console.log('✅ Comando de navegación enviado');
+          
+          // Alert de bienvenida con rol específico
+          setTimeout(() => {
+            // Usar la misma lógica para determinar el mensaje
+            const isAdminForMessage = userRole === 'ADMIN' || 
+                                    data.user?.id === 1 || 
+                                    userRole === 'admin'.toUpperCase();
+            
+            const welcomeMessage = isAdminForMessage ? 
+              `¡Bienvenido Administrador! ${data.user?.nombres || 'Admin'}` :
+              `¡Bienvenido a CrypticOnline! ${data.user?.nombres || 'Usuario'}`;
+              
+            console.log('🔍 Mostrando mensaje de bienvenida...', {
+              isAdminForMessage,
+              userRole,
+              userId: data.user?.id,
+              welcomeMessage
+            });
+            
+            Alert.alert('¡Acceso exitoso!', welcomeMessage, [
+              { 
+                text: 'Continuar',
+                onPress: () => {
+                  console.log('🔄 Usuario confirmó acceso');
+                  console.log('✅ Usuario en la app');
+                }
+              }
+            ]);
+          }, 1500);
+          
+        } catch (navError) {
+          console.error('❌ Error en navegación:', navError);
+          
+          // Mensaje específico según el rol para debugging
+          const userRole = (data.user?.role || '').toUpperCase();
+          console.log('🔍 Error con rol:', userRole);
+          
+          Alert.alert(
+            'Problema de navegación', 
+            `No se pudo navegar automáticamente (Rol: ${userRole}). Toca "Ir a Inicio" para continuar.`,
+            [
+              {
+                text: 'Ir a Inicio',
+                onPress: () => {
+                  try {
+                    if (userRole === 'ADMIN') {
+                      router.push('/admin/dashboard' as any);
+                    } else {
+                      router.push('/(tabs)/inicio');
+                    }
+                  } catch (finalError) {
+                    console.error('❌ Error final:', finalError);
+                    Alert.alert('Error crítico', 'Por favor reinicia la aplicación.');
+                  }
+                }
+              }
+            ]
+          );
+        }
       } else {
-        console.error('❌ Error en login:', data);
+        console.error('❌ Login falló:', {
+          status: response.status,
+          hasToken: !!data.token,
+          error: data.error,
+          fullData: data,
+        });
         Alert.alert('Error de Autenticación', data.error || 'Credenciales incorrectas', [
           { text: 'Intentar nuevamente' },
         ]);
       }
     } catch (error) {
-      console.error('❌ Error de conexión:', error);
+      console.error('❌ Error de conexión completo:', error);
+      if (error instanceof Error) {
+        console.error('❌ Stack trace:', error.stack);
+      }
       Alert.alert(
         'Error de Conexión',
         `No se pudo conectar con el servidor. ${error instanceof Error ? error.message : 'Error desconocido'}`,
@@ -165,10 +350,17 @@ const IndexLoginScreen: React.FC = () => {
   const handleRegister = () => router.push('/auth/registro');
 
   return (
-    <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: themeColors.background }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
+    <>
+      <Stack.Screen 
+        options={{ 
+          title: 'CrypticOnline',
+          headerShown: false, // Ocultamos el header para que se vea más limpio
+        }} 
+      />
+      <KeyboardAvoidingView
+        style={[styles.container, { backgroundColor: themeColors.background }]}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <View
           style={[styles.mainContainer, isSmallScreen ? styles.columnLayout : styles.rowLayout]}
@@ -366,6 +558,7 @@ const IndexLoginScreen: React.FC = () => {
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
+    </>
   );
 };
 

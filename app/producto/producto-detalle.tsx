@@ -17,6 +17,8 @@ export default function ProductoDetalleScreen() {
     name: string;
     price: string;
     image?: string;
+    description?: string;
+    stock?: string;
   };
   const router = useRouter();
   const scheme = useColorScheme();
@@ -24,6 +26,9 @@ export default function ProductoDetalleScreen() {
   const [cantidad, setCantidad] = useState(1);
   const [talla, setTalla] = useState('M');
   const carrito = useCarrito();
+
+  // 🚚 DEBUG: Ver qué parámetros llegan
+  console.log('📦 PRODUCTO-DETALLE - Parámetros recibidos:', params);
 
   return (
     <>
@@ -109,16 +114,20 @@ export default function ProductoDetalleScreen() {
         <TouchableOpacity
           style={[styles.button, { backgroundColor: isDark ? '#fff' : '#000' }]}
           onPress={() => {
+            console.log('🛒 Agregando al carrito:', {
+              id: params.id,
+              title: params.name,
+              price: Number(String(params.price).replace(/[^\d.]/g, '')),
+              image: params.image
+            });
+            
             carrito.addItem({
               id: params.id,
               title: params.name,
               quantity: cantidad,
               unit_price: Number(String(params.price).replace(/[^\d.]/g, '')),
               talla: talla,
-              image:
-                params.image && typeof params.image === 'number'
-                  ? params.image
-                  : require('../../assets/images/shirt1.png'),
+              image: params.image || require('../../assets/images/shirt1.png'),
             });
             router.back();
           }}
@@ -132,30 +141,53 @@ export default function ProductoDetalleScreen() {
           style={[styles.button, { backgroundColor: '#009ee3' }]}
           onPress={() => {
             const productPrice = Number(String(params.price).replace(/[^\d.]/g, ''));
-            const shippingCost = 50;
-            const totalWithShipping = (productPrice * cantidad) + shippingCost;
+            const shippingCost = 50; // 🚚 TODO: Integrar con API de envíos
+            const subtotal = productPrice * cantidad;
+            const totalWithShipping = subtotal + shippingCost;
+            
+            console.log('🛍️ COMPRA DIRECTA - Datos enviados:', {
+              productPrice,
+              cantidad,
+              subtotal,
+              shippingCost,
+              totalWithShipping
+            });
             
             router.push({
               pathname: '/pago/pago' as any,
               params: {
+                // 📦 DATOS DEL PRODUCTO
                 productoId: params.id,
-                precio: productPrice.toString(),
                 nombre: params.name,
+                precio: productPrice.toString(),
                 cantidad: cantidad.toString(),
                 talla: talla,
-                costoEnvio: shippingCost.toString(),
-                totalConEnvio: totalWithShipping.toString(),
-                // También enviar cartItems para compatibilidad
+                
+                // 🚚 DATOS DE ENVÍO (UNIFICADOS)
+                shippingCost: shippingCost.toString(),
+                subtotal: subtotal.toString(),
+                total: totalWithShipping.toString(),
+                
+                // 🛒 ESTRUCTURA COMPATIBLE CON CARRITO
                 cartItems: JSON.stringify([
                   {
-                    id: params.id, // AGREGAR ID
+                    id: params.id,
                     title: params.name,
-                    quantity: cantidad, // USAR LA CANTIDAD SELECCIONADA
+                    quantity: cantidad,
                     unit_price: productPrice,
                     talla: talla,
-                    productId: parseInt(params.id), // ID COMO NÚMERO
+                    productId: parseInt(params.id),
                   },
                 ]),
+                
+                // 🚚 METADATOS PARA FUTURA API DE ENVÍOS
+                shippingData: JSON.stringify({
+                  method: 'standard', // standard, express, premium
+                  cost: shippingCost,
+                  estimatedDays: '3-5',
+                  provider: 'default', // fedex, dhl, ups, etc.
+                  // TODO: Agregar dirección, peso, dimensiones
+                }),
               },
             });
           }}

@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -7,6 +7,7 @@ import {
   useColorScheme,
   View,
 } from 'react-native';
+import PaymentAlert from '../components/PaymentAlert';
 import PaymentNotificationOverlay from '../components/PaymentNotificationOverlay';
 import { usePaymentNotifications } from '../hooks/usePaymentNotifications';
 
@@ -16,15 +17,24 @@ export default function PaymentFailureScreen() {
   const isDark = scheme === 'dark';
   const params = useLocalSearchParams();
   const { notification, showPaymentAlert, hideNotification } = usePaymentNotifications();
+  const [showCustomAlert, setShowCustomAlert] = useState(false);
 
   useEffect(() => {
-    // Mostrar notificación de error
-    showPaymentAlert(
-      'error',
-      'Error en el Pago ❌',
-      'Hubo un problema procesando tu pago. Por favor intenta nuevamente.'
-    );
+    // Mostrar alerta personalizada en lugar de notificación nativa
+    setTimeout(() => {
+      setShowCustomAlert(true);
+    }, 500);
   }, []);
+
+  const handleRetryAction = () => {
+    setShowCustomAlert(false);
+    router.back();
+  };
+
+  const handleHomeAction = () => {
+    setShowCustomAlert(false);
+    router.replace('/(tabs)/inicio');
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}>
@@ -34,6 +44,18 @@ export default function PaymentFailureScreen() {
         title={notification.title}
         message={notification.message}
         onHide={hideNotification}
+      />
+
+      {/* Alerta personalizada de error de pago */}
+      <PaymentAlert
+        visible={showCustomAlert}
+        type="error"
+        title="Error en el Pago"
+        message="Hubo un problema procesando tu pago. Puedes intentar nuevamente o contactar soporte."
+        onPrimaryAction={handleRetryAction}
+        onSecondaryAction={handleHomeAction}
+        primaryText="Reintentar"
+        secondaryText="Ir al Inicio"
       />
       
       <View style={[styles.card, { backgroundColor: isDark ? '#222' : '#f5f5f5' }]}>
