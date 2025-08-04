@@ -5,22 +5,40 @@ import {
   Dimensions,
   FlatList,
   Image,
+  SafeAreaView,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   useColorScheme,
-  View
+  View,
 } from 'react-native';
 export const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
-  // 🔧 HARDCODED URL PARA QUE FUNCIONE (igual que en index.tsx)
-  const HARDCODED_NGROK_URL = 'https://2667b7e4b7b2.ngrok-free.app';
-  
+  // 🔧 CONFIGURACIÓN AUTOMÁTICA DE URL
+  let baseUrl =
+    process.env.EXPO_PUBLIC_NGROK_URL || process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+
+  // 🚨 FALLBACK URL SI LAS VARIABLES NO FUNCIONAN
+  const FALLBACK_NGROK_URL = 'https://aca21624c99b.ngrok-free.app';
+
+  // 🌐 DETECCIÓN AUTOMÁTICA DE ENTORNO
+  if (!process.env.EXPO_PUBLIC_NGROK_URL && !process.env.EXPO_PUBLIC_API_URL) {
+    console.log('⚠️ Variables de entorno no disponibles, usando fallback');
+    baseUrl = FALLBACK_NGROK_URL;
+  }
+
+  console.log('🔗 URL Base detectada:', baseUrl);
+  console.log('🔍 Variables disponibles:', {
+    NGROK: process.env.EXPO_PUBLIC_NGROK_URL,
+    API: process.env.EXPO_PUBLIC_API_URL,
+  });
+
   try {
-    const fullUrl = `${HARDCODED_NGROK_URL}${endpoint}`;
+    const fullUrl = `${baseUrl}${endpoint}`;
     console.log('🛍️ API Request desde inicio a:', fullUrl);
-    
+
     const response = await fetch(fullUrl, {
       headers: {
         'Content-Type': 'application/json',
@@ -34,7 +52,7 @@ export const apiRequest = async (endpoint: string, options: RequestInit = {}) =>
 
     const data = await response.json();
     console.log('📡 Response desde inicio:', { status: response.status, ok: response.ok });
-    
+
     return { response, data };
   } catch (error) {
     console.error('❌ API Request Error desde inicio:', error);
@@ -72,15 +90,15 @@ const HomeScreen = () => {
     const timer = setTimeout(() => {
       loadProducts();
     }, 1000); // 1 segundo de delay
-    
+
     return () => clearTimeout(timer);
   }, []);
 
   const loadProducts = async () => {
     try {
       console.log('🛍️ Cargando productos para la tienda...');
-      console.log('🔍 Usando la misma URL que funcionó en login: https://2667b7e4b7b2.ngrok-free.app');
-      
+      console.log('🔍 Usando URL automática desde variables de entorno');
+
       // 📝 NOTA: Usando /api/simple-products porque funciona para ambas pantallas
       // TODO: Investigar por qué /api/products no funciona (cuando tengamos tiempo)
       const { response, data } = await apiRequest('/api/simple-products', {
@@ -91,27 +109,27 @@ const HomeScreen = () => {
         ok: response.ok,
         status: response.status,
         statusText: response.statusText,
-        headers: Object.fromEntries(response.headers.entries())
+        headers: Object.fromEntries(response.headers.entries()),
       });
       console.log('📦 Data recibida desde inicio:', data);
 
       if (response.ok && data.products) {
         // Filtrar solo productos con stock disponible
         const availableProducts = data.products.filter((product: Product) => product.stock > 0);
-        
+
         console.log(`✅ ${availableProducts.length} productos disponibles cargados en inicio`);
-        
+
         // Separar productos: los más recientes y los destacados
         const recentProducts = availableProducts.slice(0, 6); // Primeros 6 para "LO ÚLTIMO"
         const topProducts = availableProducts.slice(-6); // Últimos 6 para "MÁS VENDIDOS"
-        
+
         setProducts(recentProducts);
         setFeaturedProducts(topProducts);
       } else {
         console.error('❌ Error cargando productos desde inicio:', {
           status: response.status,
           statusText: response.statusText,
-          data
+          data,
         });
         // Mantener productos de ejemplo si hay error
         setProducts([]);
@@ -121,7 +139,7 @@ const HomeScreen = () => {
       console.error('❌ Error de conexión desde inicio:', error);
       console.error('❌ Tipo de error:', error?.constructor?.name);
       console.error('❌ Mensaje de error:', error instanceof Error ? error.message : 'Unknown');
-      
+
       // Mantener productos de ejemplo si hay error de conexión
     } finally {
       setLoading(false);
@@ -137,7 +155,7 @@ const HomeScreen = () => {
         price: product.price.toString(),
         description: product.description,
         imageUrl: product.imageUrl,
-        stock: product.stock.toString()
+        stock: product.stock.toString(),
       },
     });
   };
@@ -163,9 +181,9 @@ const HomeScreen = () => {
       id: product.id,
       name: product.name,
       price: product.price,
-      imageUrl: product.imageUrl
+      imageUrl: product.imageUrl,
     });
-    
+
     router.push({
       pathname: '/producto/producto-detalle',
       params: {
@@ -174,39 +192,68 @@ const HomeScreen = () => {
         price: product.price.toString(),
         description: product.description,
         image: product.imageUrl, // 📸 PASAR IMAGEN CORRECTAMENTE
-        stock: product.stock.toString()
+        stock: product.stock.toString(),
       },
     });
   };
 
   return (
     <View style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}>
-      {/* Header transparente superpuesto */}
-      <View
-        style={[
-          styles.header,
-          {
-            backgroundColor: 'transparent',
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            zIndex: 2,
-          },
-        ]}
-      >
-        <Image source={require('../../assets/images/Logo.png')} style={styles.companyLogo} />
-        <View style={[styles.searchContainer, { justifyContent: 'center', alignItems: 'center' }]}>
-          <TextInput
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+
+      {/* Header con SafeArea */}
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.header}>
+          {/* Logo - Solo en móvil o si el ancho es pequeño */}
+          {screenWidth < 768 && (
+            <Image source={require('../../assets/images/Logo.png')} style={styles.companyLogo} />
+          )}
+
+          {/* Container de búsqueda adaptivo */}
+          <View
             style={[
-              styles.searchBar,
-              { width: screenWidth < 500 ? '80%' : 350, alignSelf: 'center' },
+              styles.searchContainer,
+              screenWidth >= 768 ? styles.searchContainerDesktop : styles.searchContainerMobile,
             ]}
-            placeholder="Buscar productos..."
-            placeholderTextColor="#999"
-          />
+          >
+            {/* Logo para desktop */}
+            {screenWidth >= 768 && (
+              <Image
+                source={require('../../assets/images/Logo.png')}
+                style={styles.companyLogoDesktop}
+              />
+            )}
+
+            <TextInput
+              style={[
+                styles.searchBar,
+                screenWidth >= 768 ? styles.searchBarDesktop : styles.searchBarMobile,
+              ]}
+              placeholder="Buscar productos..."
+              placeholderTextColor="#999"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+
+            {/* Botón de búsqueda para desktop */}
+            {screenWidth >= 768 && (
+              <TouchableOpacity
+                style={[styles.searchButton, { backgroundColor: isDark ? '#fff' : '#000' }]}
+              >
+                <Image
+                  source={
+                    isDark
+                      ? require('../../assets/images/search.png') // Ícono negro para fondo blanco
+                      : require('../../assets/images/searchwhite.png') // Ícono blanco para fondo negro
+                  }
+                  style={styles.searchIcon}
+                  resizeMode="contain"
+                />
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
-      </View>
+      </SafeAreaView>
       {/* Contenido principal */}
       <ScrollView style={styles.content}>
         {/* Banner principal */}
@@ -221,7 +268,7 @@ const HomeScreen = () => {
 
         {/* Sección LO ÚLTIMO EN MODA */}
         <Text style={styles.sectionTitle}>LO ÚLTIMO EN MODA</Text>
-        
+
         {loading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#fff" />
@@ -230,7 +277,7 @@ const HomeScreen = () => {
         ) : products.length === 0 ? (
           <View style={styles.loadingContainer}>
             <Text style={styles.loadingText}>No se pudieron cargar los productos</Text>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.retryButton}
               onPress={() => {
                 setLoading(true);
@@ -249,10 +296,14 @@ const HomeScreen = () => {
                 style={productCardStyle}
                 onPress={() => navigateToProductDetail(item)}
               >
-                <Image 
-                  source={item.imageUrl ? { uri: item.imageUrl } : { uri: 'https://via.placeholder.com/300x300?text=Producto' }} 
-                  style={productImageStyle} 
-                  resizeMode="contain" 
+                <Image
+                  source={
+                    item.imageUrl
+                      ? { uri: item.imageUrl }
+                      : { uri: 'https://via.placeholder.com/300x300?text=Producto' }
+                  }
+                  style={productImageStyle}
+                  resizeMode="contain"
                 />
                 <Text style={styles.productName}>{item.name}</Text>
                 <Text style={styles.productPrice}>${item.price.toFixed(2)}</Text>
@@ -289,10 +340,14 @@ const HomeScreen = () => {
               style={productCardStyle}
               onPress={() => navigateToProductDetail(product)}
             >
-              <Image 
-                source={product.imageUrl ? { uri: product.imageUrl } : { uri: 'https://via.placeholder.com/300x300?text=Producto' }} 
-                style={productImageStyle} 
-                resizeMode="contain" 
+              <Image
+                source={
+                  product.imageUrl
+                    ? { uri: product.imageUrl }
+                    : { uri: 'https://via.placeholder.com/300x300?text=Producto' }
+                }
+                style={productImageStyle}
+                resizeMode="contain"
               />
               <Text style={styles.featuredName}>{product.name}</Text>
               <Text style={styles.featuredPrice}>${product.price.toFixed(2)}</Text>
@@ -315,6 +370,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000',
   },
+  safeArea: {
+    backgroundColor: '#000',
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -325,14 +383,34 @@ const styles = StyleSheet.create({
     borderBottomColor: '#333',
   },
   companyLogo: {
-    width: 150,
-    height: 150,
+    width: 80,
+    height: 80,
     marginRight: 10,
+    resizeMode: 'contain',
+  },
+  companyLogoDesktop: {
+    width: 120,
+    height: 60,
+    marginRight: 20,
     resizeMode: 'contain',
   },
   searchContainer: {
     flex: 1,
     flexDirection: 'row',
+  },
+  searchContainerMobile: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  searchContainerDesktop: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    maxWidth: 600,
+    marginHorizontal: 'auto',
   },
   searchBar: {
     flex: 1,
@@ -342,6 +420,51 @@ const styles = StyleSheet.create({
     padding: 10,
     paddingLeft: 15,
     fontSize: 16,
+  },
+  searchBarMobile: {
+    backgroundColor: '#222',
+    color: '#fff',
+    borderRadius: 20,
+    padding: 10,
+    paddingLeft: 15,
+    fontSize: 16,
+    width: '80%',
+  },
+  searchBarDesktop: {
+    flex: 1,
+    backgroundColor: '#222',
+    color: '#fff',
+    borderRadius: 25,
+    padding: 12,
+    paddingLeft: 20,
+    fontSize: 16,
+    borderWidth: 2,
+    borderColor: '#333',
+    minWidth: 300,
+    maxWidth: 500,
+  },
+  searchButton: {
+    backgroundColor: '#fff',
+    borderRadius: 25,
+    padding: 12,
+    marginLeft: 10,
+    width: 50,
+    height: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  searchButtonText: {
+    fontSize: 18,
+    color: '#fff',
+  },
+  searchIcon: {
+    width: 20,
+    height: 20,
   },
   iconsContainer: {
     flexDirection: 'row',

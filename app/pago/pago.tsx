@@ -19,7 +19,7 @@ import {
   Text,
   TouchableOpacity,
   useColorScheme,
-  View
+  View,
 } from 'react-native';
 import PaymentNotificationOverlay from '../components/PaymentNotificationOverlay';
 import { API_CONFIG, createApiUrl, createAuthHeaders } from '../config/api';
@@ -36,23 +36,24 @@ export default function PagoScreen() {
   const [loading, setLoading] = useState(false);
   const params = useLocalSearchParams();
   const router = useRouter();
-  const { notification, checkPaymentStatus, hideNotification, showPaymentAlert } = usePaymentNotifications();
+  const { notification, checkPaymentStatus, hideNotification, showPaymentAlert } =
+    usePaymentNotifications();
   const { startPaymentSession } = usePaymentReturnHandler();
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
   const carrito = useCarrito();
-  
+
   // 🎯 DETECTAR SI ES UN RETRY DESDE DETALLE-PEDIDO
   const isRetryPayment = params.isRetry === 'true';
   const shouldAutoExecute = params.autoExecute === 'true';
   const selectedMethod = params.selectedMethod as string;
   const existingOrderId = params.orderId as string;
-  
+
   console.log('🔍 Parámetros de pago detectados:', {
     isRetryPayment,
     shouldAutoExecute,
     selectedMethod,
     existingOrderId,
-    allParams: params
+    allParams: params,
   });
 
   // 🚚 DEBUG: Revisar datos de envío específicamente
@@ -63,7 +64,7 @@ export default function PagoScreen() {
     shippingData: params.shippingData,
     precio: params.precio,
     cantidad: params.cantidad,
-    productoId: params.productoId
+    productoId: params.productoId,
   });
 
   // cartItems debe ser un array de productos [{ title, quantity, unit_price }]
@@ -76,7 +77,7 @@ export default function PagoScreen() {
     if (isRetryPayment && shouldAutoExecute && selectedMethod && existingOrderId) {
       console.log('🔄 RETRY DETECTADO - Ejecutando automáticamente:', selectedMethod);
       console.log('📦 Orden existente ID:', existingOrderId);
-      
+
       // Ejecutar automáticamente el método seleccionado
       setTimeout(() => {
         switch (selectedMethod) {
@@ -84,32 +85,32 @@ export default function PagoScreen() {
             console.log('💳 Ejecutando pago con tarjeta...');
             handleCardPayment(existingOrderId);
             break;
-            
+
           case 'mercadopago':
             console.log('💰 Ejecutando pago con MercadoPago...');
             handleMercadoPagoRetry(existingOrderId);
             break;
-            
+
           case 'transfer':
             console.log('🏦 Ejecutando transferencia bancaria...');
             handleAlternativePayment('transfer');
             break;
-            
+
           case 'oxxo':
             console.log('🏪 Ejecutando pago en OXXO...');
             handleAlternativePayment('oxxo');
             break;
-            
+
           case 'paypal':
             console.log('🌍 Ejecutando pago con PayPal...');
             handleAlternativePayment('paypal');
             break;
-            
+
           case 'crypto':
             console.log('₿ Ejecutando pago con criptomonedas...');
             handleAlternativePayment('crypto');
             break;
-            
+
           default:
             console.error('❌ Método de pago no reconocido:', selectedMethod);
             Alert.alert('Error', 'Método de pago no válido');
@@ -124,7 +125,7 @@ export default function PagoScreen() {
     try {
       setLoading(true);
       console.log('🔄 Procesando retry de MercadoPago para orden:', orderId);
-      
+
       const token = await AsyncStorage.getItem('token');
       if (!token) {
         Alert.alert('Error', 'Sesión expirada. Por favor inicia sesión nuevamente.');
@@ -136,23 +137,27 @@ export default function PagoScreen() {
       // El backend debe detectar estos campos y actualizar el pedido existente
       const retryData = {
         // 🎯 IDENTIFICADORES CLAVE PARA EL BACKEND
-        isRetry: true,                    // Bandera que indica que es un retry
-        existingOrderId: orderId,         // ID del pedido que queremos actualizar
-        retryPayment: true,               // Confirma que es reintento de pago
-        
+        isRetry: true, // Bandera que indica que es un retry
+        existingOrderId: orderId, // ID del pedido que queremos actualizar
+        retryPayment: true, // Confirma que es reintento de pago
+        updateExistingOrder: true, // NO crear nueva orden, usar la existente
+
         // Datos mínimos para MercadoPago (solo para crear la preferencia)
-        items: [{
-          title: `Reintento pago - Orden #${orderId}`,
-          quantity: 1,
-          unit_price: parseFloat(params.total as string) || 90
-        }],
-        
+        items: [
+          {
+            title: `Reintento pago - Orden #${orderId}`,
+            quantity: 1,
+            unit_price: parseFloat(params.total as string) || 90,
+          },
+        ],
+
         // Metadatos adicionales para el backend
         metadata: {
           originalOrderId: orderId,
           paymentAttempt: 'retry',
-          source: 'order-detail-screen'
-        }
+          source: 'order-detail-screen',
+          doNotCreateNewOrder: true, // Importante: NO crear nueva orden
+        },
       };
 
       console.log('🎯 Enviando datos de retry:', retryData);
@@ -163,12 +168,38 @@ export default function PagoScreen() {
         body: JSON.stringify(retryData),
       });
 
+      console.log('📡 Response status:', response.status);
+      console.log('📡 Response headers:', Object.fromEntries(response.headers.entries()));
+
+      // Verificar si la respuesta es HTML en lugar de JSON
+      const contentType = response.headers.get('content-type');
+      console.log('📋 Content-Type:', contentType);
+
+      if (contentType && contentType.includes('text/html')) {
+        const htmlText = await response.text();
+        console.log(
+          '❌ Recibido HTML en lugar de JSON para retry. Primeros 200 chars:',
+          htmlText.substring(0, 200)
+        );
+        throw new Error(
+          'El servidor devolvió HTML en lugar de JSON. Verifica la URL de ngrok y que el backend esté funcionando.'
+        );
+      }
+
       const data = await response.json();
-      
+      console.log('📦 Respuesta completa de retry:', data);
+
       if (response.ok && data.preference) {
         console.log('✅ Nueva preferencia creada para retry:', data.preference.id);
         console.log('📦 Usando orden existente:', orderId, '(NO se creó nueva orden)');
-        
+
+        // Verificar si efectivamente es retry
+        if (data.order && data.order.isRetry) {
+          console.log('✅ Confirmado: Es un retry, NO se creó nueva orden');
+        } else {
+          console.warn('⚠️ ADVERTENCIA: Parece que se creó nueva orden en lugar de usar existente');
+        }
+
         // Guardar sesión de pago con el MISMO orderId
         await startPaymentSession(orderId, data.preference.id);
 
@@ -197,21 +228,21 @@ export default function PagoScreen() {
     try {
       setLoading(true);
       console.log('💳 Procesando pago con tarjeta...');
-      
+
       // Por ahora mostrar alert, luego implementar Stripe
       Alert.alert(
         'Pago con Tarjeta',
         `${orderId ? `Procesando pago para orden #${orderId}` : 'Procesando nuevo pago'}\n\n• Procesamiento seguro con Stripe\n• Aceptamos Visa, Mastercard, American Express\n• Autorización inmediata\n\n¿Continuar?`,
         [
           { text: 'Cancelar', style: 'cancel' },
-          { 
-            text: 'Continuar', 
+          {
+            text: 'Continuar',
             onPress: () => {
               console.log('🏦 Implementar integración con Stripe aquí');
               // TODO: Implementar Stripe
               Alert.alert('Próximamente', 'La integración con Stripe estará disponible pronto.');
-            }
-          }
+            },
+          },
         ]
       );
     } catch (error) {
@@ -222,7 +253,7 @@ export default function PagoScreen() {
     }
   };
 
-  // Función para Mercado Pago
+  // Función para Mercado Pago (DEPRECATED - usar handleMercadoPagoPayment)
   const handleMercadoPago = async () => {
     setLoading(true);
     try {
@@ -231,15 +262,57 @@ export default function PagoScreen() {
       console.log('Token:', token ? 'Existe' : 'No existe');
       console.log('Items enviados:', cartItems);
 
-      const response = await fetch('http://192.168.0.108:3000/api/payments/create', {
+      // 🔧 CONFIGURACIÓN AUTOMÁTICA DE URL
+      let baseUrl =
+        process.env.EXPO_PUBLIC_NGROK_URL ||
+        process.env.EXPO_PUBLIC_API_URL ||
+        'http://localhost:3000';
+
+      // 🚨 FALLBACK URL SI LAS VARIABLES NO FUNCIONAN (ACTUALIZADA)
+      const FALLBACK_NGROK_URL = 'https://aca21624c99b.ngrok-free.app';
+
+      // 🌐 DETECCIÓN AUTOMÁTICA DE ENTORNO
+      if (!process.env.EXPO_PUBLIC_NGROK_URL && !process.env.EXPO_PUBLIC_API_URL) {
+        console.log('⚠️ Variables de entorno no disponibles en pago, usando fallback');
+        baseUrl = FALLBACK_NGROK_URL;
+      }
+
+      const paymentUrl = `${baseUrl}/api/payments/create`;
+      console.log('🔗 URL Base detectada en pago:', baseUrl);
+      console.log('💳 URL de pago:', paymentUrl);
+
+      // 🚚 AGREGAR COSTO DE ENVÍO A FUNCIÓN ANTIGUA
+      const shippingCost = 50;
+      const itemsWithShipping = [...cartItems];
+      const itemsTotal = cartItems.reduce(
+        (sum: number, item: any) => sum + item.unit_price * item.quantity,
+        0
+      );
+      const totalWithShipping = itemsTotal + shippingCost;
+
+      console.log('💰 FUNCIÓN ANTIGUA - Agregando envío:', {
+        itemsTotal,
+        shippingCost,
+        totalWithShipping,
+      });
+
+      const response = await fetch(paymentUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true',
+          'User-Agent': 'CrypticOnline-Mobile-App',
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          items: cartItems,
+          items: itemsWithShipping,
           orderId: params.productoId || 'carrito',
+          // 🚚 AGREGAR DATOS DE ENVÍO
+          shipping: {
+            cost: shippingCost,
+            method: 'standard',
+          },
+          totalAmount: totalWithShipping,
         }),
       });
 
@@ -250,6 +323,11 @@ export default function PagoScreen() {
       if (response.ok) {
         const data = JSON.parse(text);
         if (data.init_point) {
+          // 🎯 GUARDAR SESIÓN DE PAGO PARA NOTIFICACIONES
+          if (data.order && data.preference) {
+            await startPaymentSession(data.order.id.toString(), data.preference.id);
+          }
+
           Linking.openURL(data.init_point);
         } else {
           console.error('No hay init_point en la respuesta:', data);
@@ -272,10 +350,13 @@ export default function PagoScreen() {
     try {
       const token = await AsyncStorage.getItem('token');
       if (!token) {
-        showPaymentAlert('error', 'Error de Autenticación', 'No estás autenticado. Por favor inicia sesión.');
+        showPaymentAlert(
+          'error',
+          'Error de Autenticación',
+          'No estás autenticado. Por favor inicia sesión.'
+        );
         router.push('/auth/login');
 
-        
         return;
       }
 
@@ -283,12 +364,13 @@ export default function PagoScreen() {
       if (params.productoId === 'carrito') {
         // Compra del carrito completo
         orderData = {
-          items: carrito.items.map(item => ({
+          items: carrito.items.map((item) => ({
             title: item.title,
             quantity: item.quantity,
             unit_price: item.unit_price,
           })),
-          totalAmount: carrito.items.reduce((sum, item) => sum + item.unit_price * item.quantity, 0) + 50,
+          totalAmount:
+            carrito.items.reduce((sum, item) => sum + item.unit_price * item.quantity, 0) + 50,
         };
       } else {
         // Compra de producto individual
@@ -307,24 +389,24 @@ export default function PagoScreen() {
       });
 
       const data = await response.json();
-      
+
       if (response.ok) {
         console.log('✅ Orden creada:', data.order.id);
         setCurrentOrderId(data.order.id.toString());
-        
+
         // Iniciar sesión de pago ANTES de navegar a MercadoPago
         await startPaymentSession(data.order.id.toString(), data.preference.id);
-        
+
         // Limpiar carrito si era compra del carrito
         if (params.productoId === 'carrito') {
           console.log('🛒 Limpiando carrito después de crear orden...');
           carrito.clearCart();
         }
-        
+
         // Navegar a MercadoPago
         const initPoint = data.preference.init_point;
         console.log('🌐 Navegando a MercadoPago...');
-        
+
         // Usar Linking para abrir MercadoPago en navegador externo
         if (Platform.OS === 'web') {
           window.open(initPoint, '_blank');
@@ -335,7 +417,11 @@ export default function PagoScreen() {
         }
       } else {
         console.error('❌ Error al crear orden:', data);
-        showPaymentAlert('error', 'Error al Crear Orden', data.error || 'No se pudo crear la orden');
+        showPaymentAlert(
+          'error',
+          'Error al Crear Orden',
+          data.error || 'No se pudo crear la orden'
+        );
       }
     } catch (error) {
       console.error('❌ Error de conexión:', error);
@@ -349,10 +435,10 @@ export default function PagoScreen() {
   const handleMercadoPagoPayment = async () => {
     try {
       setLoading(true);
-      
+
       console.log('🛒 Preparando pago con MercadoPago...');
       console.log('📦 Parámetros recibidos:', params);
-      
+
       const token = await AsyncStorage.getItem('token');
       if (!token) {
         Alert.alert('Error', 'Sesión expirada. Por favor inicia sesión nuevamente.');
@@ -367,22 +453,25 @@ export default function PagoScreen() {
         // COMPRA DEL CARRITO COMPLETO
         console.log('🛒 Procesando compra del carrito...');
         console.log('📦 Items del carrito:', carrito.items);
-        
+
         if (!carrito.items || carrito.items.length === 0) {
           Alert.alert('Error', 'El carrito está vacío');
           return;
         }
 
         // Calcular total con envío
-        const itemsTotal = carrito.items.reduce((sum: number, item: any) => sum + item.unit_price * item.quantity, 0);
+        const itemsTotal = carrito.items.reduce(
+          (sum: number, item: any) => sum + item.unit_price * item.quantity,
+          0
+        );
         const shippingCost = 50;
         const totalWithShipping = itemsTotal + shippingCost;
-        
+
         console.log('💰 Cálculo de totales del carrito:');
         console.log('  - Items total:', itemsTotal);
         console.log('  - Costo de envío:', shippingCost);
         console.log('  - Total con envío:', totalWithShipping);
-        
+
         paymentData = {
           items: carrito.items.map((item: any) => ({
             title: item.title || item.product?.name,
@@ -390,7 +479,7 @@ export default function PagoScreen() {
             unit_price: item.unit_price,
           })),
           shipping: {
-            cost: shippingCost
+            cost: shippingCost,
           },
           cartItems: carrito.items.map((item: any) => ({
             productId: parseInt(item.id) || item.product?.id,
@@ -399,7 +488,6 @@ export default function PagoScreen() {
           })),
           totalAmount: totalWithShipping,
         };
-        
       } else {
         // COMPRA DE PRODUCTO INDIVIDUAL
         console.log('🛍️ Procesando compra de producto individual...');
@@ -409,76 +497,126 @@ export default function PagoScreen() {
         console.log('📦 Cantidad desde parámetros:', params.cantidad);
         console.log('🚚 Costo de envío desde parámetros:', params.shippingCost);
         console.log('🚚 Total desde parámetros:', params.total);
-        
+
         const productPrice = parseFloat(params.precio as string) || 0;
         const productQuantity = parseInt(params.cantidad as string) || 1;
-        
+
         // 🚚 MANEJO UNIFICADO DE COSTOS DE ENVÍO
         let shippingCost = 50; // Valor por defecto
-        
+
         // Priorizar datos que vienen de los parámetros
         if (params.shippingCost) {
           shippingCost = parseFloat(params.shippingCost as string);
           console.log('✅ Usando costo de envío desde parámetros:', shippingCost);
         } else {
-          console.log('⚠️ No hay costo de envío en parámetros, usando valor por defecto:', shippingCost);
+          console.log(
+            '⚠️ No hay costo de envío en parámetros, usando valor por defecto:',
+            shippingCost
+          );
           console.log('🔍 Parámetros disponibles:', Object.keys(params));
         }
-        
+
+        // 🔧 ASEGURAR QUE EL COSTO DE ENVÍO SEA VÁLIDO
+        if (isNaN(shippingCost) || shippingCost <= 0) {
+          console.log('⚠️ Costo de envío inválido, usando valor por defecto de 50');
+          shippingCost = 50;
+        }
+
         // Calcular totales (por si no vienen en parámetros)
         const subtotal = productPrice * productQuantity;
-        const totalWithShipping = params.total ? parseFloat(params.total as string) : subtotal + shippingCost;
-        
+
+        // 🚚 PRIORIZAR TOTAL QUE VIENE EN PARÁMETROS (ya incluye envío)
+        let totalWithShipping;
+        if (params.total) {
+          totalWithShipping = parseFloat(params.total as string);
+          console.log('✅ Usando total desde parámetros (ya incluye envío):', totalWithShipping);
+        } else {
+          totalWithShipping = subtotal + shippingCost;
+          console.log('⚠️ Calculando total manualmente:', totalWithShipping);
+        }
+
         console.log('💰 Cálculo de totales del producto:');
         console.log('  - Precio del producto:', productPrice);
         console.log('  - Cantidad del producto:', productQuantity);
         console.log('  - Subtotal productos:', subtotal);
         console.log('  - Costo de envío FINAL:', shippingCost);
         console.log('  - Total con envío FINAL:', totalWithShipping);
-        
+        console.log('  - Fuente del total:', params.total ? 'parámetros' : 'calculado');
+
         paymentData = {
-          items: [{
-            title: params.nombre as string || 'Producto',
-            quantity: productQuantity,
-            unit_price: productPrice,
-          }],
+          items: [
+            {
+              title: (params.nombre as string) || 'Producto',
+              quantity: productQuantity,
+              unit_price: productPrice,
+            },
+          ],
           shipping: {
             cost: shippingCost,
             method: 'standard', // TODO: Obtener desde shippingData cuando se integre API
-            estimatedDays: '3-5'
+            estimatedDays: '3-5',
           },
-          cartItems: [{
-            productId: parseInt(params.productoId as string),
-            quantity: productQuantity,
-            unit_price: productPrice,
-            id: params.productoId as string,
-            title: params.nombre as string || 'Producto',
-            talla: params.talla as string || 'M',
-          }],
+          cartItems: [
+            {
+              productId: parseInt(params.productoId as string),
+              quantity: productQuantity,
+              unit_price: productPrice,
+              id: params.productoId as string,
+              title: (params.nombre as string) || 'Producto',
+              talla: (params.talla as string) || 'M',
+            },
+          ],
+          // 🚚 ESTE ERA EL PROBLEMA: Usar el total correcto con envío
           totalAmount: totalWithShipping,
           // 🚚 METADATOS PARA FUTURA INTEGRACIÓN CON API DE ENVÍOS
-          shippingData: params.shippingData ? JSON.parse(params.shippingData as string) : {
-            method: 'standard',
-            cost: shippingCost,
-            estimatedDays: '3-5',
-            provider: 'default'
-          }
+          shippingData: params.shippingData
+            ? JSON.parse(params.shippingData as string)
+            : {
+                method: 'standard',
+                cost: shippingCost,
+                estimatedDays: '3-5',
+                provider: 'default',
+              },
         };
+
+        console.log('✅ TOTAL FINAL ENVIADO AL BACKEND:', totalWithShipping);
+        console.log('🔍 Verificación de datos:', {
+          'Items total (productos)': subtotal,
+          'Costo de envío': shippingCost,
+          'Total con envío': totalWithShipping,
+          'totalAmount enviado': totalWithShipping,
+        });
       }
-      
+
       console.log('💳 Enviando datos a MP:', JSON.stringify(paymentData, null, 2));
+
+      // 🔍 VERIFICACIÓN FINAL DE QUE EL TOTAL INCLUYA ENVÍO
+      console.log('🚚 VERIFICACIÓN FINAL - Total que se enviará al backend:');
+      console.log('  - totalAmount:', paymentData.totalAmount);
+      console.log('  - shipping.cost:', paymentData.shipping.cost);
+      console.log(
+        '  - ¿Total incluye envío?:',
+        paymentData.totalAmount >= paymentData.shipping.cost
+      );
+
+      if (paymentData.totalAmount < paymentData.shipping.cost) {
+        console.error('🚨 ERROR: El total es menor que el costo de envío. Algo está mal.');
+      }
 
       // Verificar si el servidor está funcionando
       console.log('🔍 Verificando conexión con el servidor...');
       try {
-        const healthCheck = await fetch(createApiUrl(API_CONFIG.ENDPOINTS.HEALTH), { 
+        const healthCheck = await fetch(createApiUrl(API_CONFIG.ENDPOINTS.HEALTH), {
           method: 'GET',
           headers: createAuthHeaders(token),
         });
         console.log('💚 Health check status:', healthCheck.status);
       } catch (healthError) {
         console.error('💔 Error en health check:', healthError);
-        Alert.alert('Error de Conexión', 'No se puede conectar con el servidor. Verifica que esté ejecutándose.');
+        Alert.alert(
+          'Error de Conexión',
+          'No se puede conectar con el servidor. Verifica que esté ejecutándose.'
+        );
         return;
       }
 
@@ -490,7 +628,7 @@ export default function PagoScreen() {
 
       console.log('🌐 Response status:', response.status);
       console.log('🌐 Response headers:', response.headers);
-      
+
       const responseText = await response.text();
       console.log('📄 Response text (primeros 500 chars):', responseText.substring(0, 500));
 
@@ -500,13 +638,26 @@ export default function PagoScreen() {
       } catch (parseError) {
         console.error('❌ Error parsing JSON:', parseError);
         console.error('📄 Respuesta completa del servidor:', responseText);
-        Alert.alert('Error de Servidor', `El servidor devolvió una respuesta inválida. Status: ${response.status}`);
+        Alert.alert(
+          'Error de Servidor',
+          `El servidor devolvió una respuesta inválida. Status: ${response.status}`
+        );
         return;
       }
-      
+
       if (response.ok && data.preference) {
         console.log('✅ Preferencia creada:', data.preference.id);
         console.log('📦 Orden creada:', data.order.id);
+
+        // 🔍 VERIFICAR QUE EL TOTAL DE LA ORDEN INCLUYA ENVÍO
+        console.log('💰 Verificación de orden creada:');
+        console.log('  - Total enviado al backend:', paymentData.totalAmount);
+        console.log('  - Total de la orden creada:', data.order.total || 'No disponible');
+        console.log('  - ¿Coinciden?:', data.order.total === paymentData.totalAmount);
+
+        if (data.order.total && data.order.total !== paymentData.totalAmount) {
+          console.warn('⚠️ ADVERTENCIA: El total de la orden no coincide con el enviado');
+        }
 
         // Guardar sesión de pago
         await startPaymentSession(data.order.id, data.preference.id);
@@ -528,17 +679,23 @@ export default function PagoScreen() {
         console.error('❌ Error creando preferencia:', data);
         console.error('❌ Response status:', response.status);
         console.error('❌ Response statusText:', response.statusText);
-        
+
         // Manejar diferentes tipos de errores
         if (response.status === 404) {
           Alert.alert('Error 404', 'El endpoint de pagos no existe. Verifica la URL del servidor.');
         } else if (response.status === 500) {
-          Alert.alert('Error de Servidor', 'Error interno del servidor. Revisa los logs del backend.');
+          Alert.alert(
+            'Error de Servidor',
+            'Error interno del servidor. Revisa los logs del backend.'
+          );
         } else if (response.status === 401) {
           Alert.alert('Error de Autenticación', 'Token inválido. Inicia sesión nuevamente.');
           router.push('/auth/login');
         } else {
-          Alert.alert('Error de Pago', data.error || `Error ${response.status}: ${response.statusText}`);
+          Alert.alert(
+            'Error de Pago',
+            data.error || `Error ${response.status}: ${response.statusText}`
+          );
         }
       }
     } catch (error) {
@@ -553,7 +710,7 @@ export default function PagoScreen() {
   useEffect(() => {
     if (params.payment_status && currentOrderId) {
       console.log('🔄 Regresando de MercadoPago con estado:', params.payment_status);
-      
+
       // Simular verificación de pago
       setTimeout(async () => {
         await checkPaymentStatus(currentOrderId);
@@ -568,24 +725,21 @@ export default function PagoScreen() {
 
   /**
    * 💳 FUNCIÓN: handleAlternativePayment
-   * 
+   *
    * ¿QUÉ HACE?: Maneja métodos de pago alternativos
    */
   const handleAlternativePayment = (method: string) => {
     console.log('💳 Método de pago alternativo seleccionado:', method);
-    
+
     switch (method) {
       case 'transfer':
         Alert.alert(
           'Transferencia Bancaria',
           'CUENTA CLABE: 123456789012345678\nBANCO: BBVA\nTITULAR: CrypticOnline\n\nEnvía tu comprobante de pago al WhatsApp.',
-          [
-            { text: 'Copiar CLABE', onPress: () => console.log('CLABE copiada') },
-            { text: 'OK' }
-          ]
+          [{ text: 'Copiar CLABE', onPress: () => console.log('CLABE copiada') }, { text: 'OK' }]
         );
         break;
-        
+
       case 'oxxo':
         Alert.alert(
           'Pago en OXXO',
@@ -593,7 +747,7 @@ export default function PagoScreen() {
           [{ text: 'Entendido' }]
         );
         break;
-        
+
       case 'paypal':
         Alert.alert(
           'PayPal',
@@ -601,7 +755,7 @@ export default function PagoScreen() {
           [{ text: 'Entendido' }]
         );
         break;
-        
+
       case 'crypto':
         Alert.alert(
           'Criptomonedas',
@@ -609,7 +763,7 @@ export default function PagoScreen() {
           [{ text: 'Copiar dirección' }, { text: 'OK' }]
         );
         break;
-        
+
       default:
         Alert.alert('Método no disponible', 'Este método de pago estará disponible pronto.');
     }
@@ -617,13 +771,13 @@ export default function PagoScreen() {
 
   return (
     <>
-      <Stack.Screen 
-        options={{ 
+      <Stack.Screen
+        options={{
           title: 'Método de Pago',
           headerShown: true,
           headerBackTitle: 'Tienda',
-          presentation: 'card'
-        }} 
+          presentation: 'card',
+        }}
       />
       <View style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}>
         {/* Overlay de notificación */}
@@ -634,8 +788,8 @@ export default function PagoScreen() {
           message={notification.message}
           onHide={hideNotification}
         />
-        
-        <ScrollView 
+
+        <ScrollView
           style={styles.content}
           contentContainerStyle={styles.contentContainer}
           showsVerticalScrollIndicator={false}
@@ -648,15 +802,22 @@ export default function PagoScreen() {
                 Procesando pago...
               </Text>
               <Text style={[styles.retryLoadingSubtitle, { color: isDark ? '#ccc' : '#666' }]}>
-                Ejecutando {selectedMethod === 'mercadopago' ? 'MercadoPago' : 
-                             selectedMethod === 'card' ? 'pago con tarjeta' :
-                             selectedMethod === 'transfer' ? 'transferencia bancaria' :
-                             selectedMethod === 'oxxo' ? 'pago en OXXO' :
-                             selectedMethod === 'paypal' ? 'PayPal' :
-                             selectedMethod === 'crypto' ? 'pago con criptomonedas' :
-                             'método seleccionado'}
+                Ejecutando{' '}
+                {selectedMethod === 'mercadopago'
+                  ? 'MercadoPago'
+                  : selectedMethod === 'card'
+                    ? 'pago con tarjeta'
+                    : selectedMethod === 'transfer'
+                      ? 'transferencia bancaria'
+                      : selectedMethod === 'oxxo'
+                        ? 'pago en OXXO'
+                        : selectedMethod === 'paypal'
+                          ? 'PayPal'
+                          : selectedMethod === 'crypto'
+                            ? 'pago con criptomonedas'
+                            : 'método seleccionado'}
               </Text>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.cancelRetryButton, { borderColor: isDark ? '#fff' : '#000' }]}
                 onPress={() => router.back()}
               >
@@ -672,21 +833,22 @@ export default function PagoScreen() {
               <Text style={[styles.mainTitle, { color: isDark ? '#fff' : '#000' }]}>
                 Selecciona tu método de pago
               </Text>
-              
+
               {/* Subtítulo */}
               <Text style={[styles.subtitle, { color: isDark ? '#ccc' : '#666' }]}>
                 Elige la opción que prefieras para completar tu compra
               </Text>
 
               {/* Contenedor de métodos de pago */}
-              <View style={[styles.paymentSection, { backgroundColor: isDark ? '#222' : '#f5f5f5' }]}>
-                
+              <View
+                style={[styles.paymentSection, { backgroundColor: isDark ? '#222' : '#f5f5f5' }]}
+              >
                 {/* MercadoPago */}
                 <View style={styles.paymentMethodRow}>
                   <View style={styles.paymentMethodInfo}>
                     <View style={styles.paymentMethodHeader}>
-                      <Image 
-                        source={require('../../assets/images/payment-icons/mercadopago.png')} 
+                      <Image
+                        source={require('../../assets/images/payment-icons/mercadopago.png')}
                         style={styles.paymentHeaderIcon}
                       />
                       <Text style={[styles.paymentMethodName, { color: isDark ? '#fff' : '#000' }]}>
@@ -701,161 +863,189 @@ export default function PagoScreen() {
                     </Text>
                   </View>
                   <TouchableOpacity
-                    style={[styles.paymentIconButton, { backgroundColor: 'rgba(0,180,216,0.1)', borderWidth: 1, borderColor: '#00b4d8' }]}
+                    style={[
+                      styles.paymentIconButton,
+                      {
+                        backgroundColor: 'rgba(0,180,216,0.1)',
+                        borderWidth: 1,
+                        borderColor: '#00b4d8',
+                      },
+                    ]}
                     onPress={handleMercadoPagoPayment}
                     disabled={loading}
                   >
                     {loading ? (
                       <ActivityIndicator size={24} color="#00b4d8" />
                     ) : (
-                      <Image 
-                        source={require('../../assets/images/payment-icons/mercadopago.png')} 
+                      <Image
+                        source={require('../../assets/images/payment-icons/mercadopago.png')}
                         style={styles.paymentButtonIcon}
                       />
                     )}
                   </TouchableOpacity>
                 </View>
 
-            {/* Transferencia Bancaria */}
-            <View style={styles.paymentMethodRow}>
-              <View style={styles.paymentMethodInfo}>
-                <View style={styles.paymentMethodHeader}>
-                  <MaterialIcons name="account-balance" size={20} color="#4CAF50" />
-                  <Text style={[styles.paymentMethodName, { color: isDark ? '#fff' : '#000' }]}>
-                    Transferencia Bancaria
-                  </Text>
+                {/* Transferencia Bancaria */}
+                <View style={styles.paymentMethodRow}>
+                  <View style={styles.paymentMethodInfo}>
+                    <View style={styles.paymentMethodHeader}>
+                      <MaterialIcons name="account-balance" size={20} color="#4CAF50" />
+                      <Text style={[styles.paymentMethodName, { color: isDark ? '#fff' : '#000' }]}>
+                        Transferencia Bancaria
+                      </Text>
+                    </View>
+                    <Text style={[styles.paymentMethodDesc, { color: isDark ? '#ccc' : '#666' }]}>
+                      SPEI, transferencia directa
+                    </Text>
+                    <Text style={[styles.paymentMethodFeature, { color: '#4CAF50' }]}>
+                      ✓ Sin comisiones adicionales
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.paymentIconButton, { backgroundColor: '#4CAF50' }]}
+                    onPress={() => handleAlternativePayment('transfer')}
+                    disabled={loading}
+                  >
+                    <MaterialIcons name="account-balance" size={28} color="#fff" />
+                  </TouchableOpacity>
                 </View>
-                <Text style={[styles.paymentMethodDesc, { color: isDark ? '#ccc' : '#666' }]}>
-                  SPEI, transferencia directa
-                </Text>
-                <Text style={[styles.paymentMethodFeature, { color: '#4CAF50' }]}>
-                  ✓ Sin comisiones adicionales
+
+                {/* OXXO */}
+                <View style={styles.paymentMethodRow}>
+                  <View style={styles.paymentMethodInfo}>
+                    <View style={styles.paymentMethodHeader}>
+                      <Image
+                        source={require('../../assets/images/payment-icons/oxxo.png')}
+                        style={styles.paymentHeaderIcon}
+                      />
+                      <Text style={[styles.paymentMethodName, { color: isDark ? '#fff' : '#000' }]}>
+                        OXXO
+                      </Text>
+                    </View>
+                    <Text style={[styles.paymentMethodDesc, { color: isDark ? '#ccc' : '#666' }]}>
+                      Pago en efectivo en tienda
+                    </Text>
+                    <Text style={[styles.paymentMethodFeature, { color: '#E91E63' }]}>
+                      ✓ Más de 20,000 tiendas
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[
+                      styles.paymentIconButton,
+                      {
+                        backgroundColor: 'rgba(233,30,99,0.1)',
+                        borderWidth: 1,
+                        borderColor: '#E91E63',
+                      },
+                    ]}
+                    onPress={() => handleAlternativePayment('oxxo')}
+                    disabled={loading}
+                  >
+                    <Image
+                      source={require('../../assets/images/payment-icons/oxxo.png')}
+                      style={styles.paymentButtonIcon}
+                    />
+                  </TouchableOpacity>
+                </View>
+
+                {/* PayPal */}
+                <View style={styles.paymentMethodRow}>
+                  <View style={styles.paymentMethodInfo}>
+                    <View style={styles.paymentMethodHeader}>
+                      <Image
+                        source={require('../../assets/images/payment-icons/paypal.png')}
+                        style={styles.paymentHeaderIcon}
+                      />
+                      <Text style={[styles.paymentMethodName, { color: isDark ? '#fff' : '#000' }]}>
+                        PayPal
+                      </Text>
+                    </View>
+                    <Text style={[styles.paymentMethodDesc, { color: isDark ? '#ccc' : '#666' }]}>
+                      Pago internacional seguro
+                    </Text>
+                    <Text style={[styles.paymentMethodFeature, { color: '#0070ba' }]}>
+                      ✓ Protección del comprador
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[
+                      styles.paymentIconButton,
+                      {
+                        backgroundColor: 'rgba(0,112,186,0.1)',
+                        borderWidth: 1,
+                        borderColor: '#0070ba',
+                      },
+                    ]}
+                    onPress={() => handleAlternativePayment('paypal')}
+                    disabled={loading}
+                  >
+                    <Image
+                      source={require('../../assets/images/payment-icons/paypal.png')}
+                      style={styles.paymentButtonIcon}
+                    />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Criptomonedas */}
+                <View style={styles.paymentMethodRow}>
+                  <View style={styles.paymentMethodInfo}>
+                    <View style={styles.paymentMethodHeader}>
+                      <Image
+                        source={require('../../assets/images/payment-icons/bitcoin.png')}
+                        style={styles.paymentHeaderIcon}
+                      />
+                      <Text style={[styles.paymentMethodName, { color: isDark ? '#fff' : '#000' }]}>
+                        Criptomonedas
+                      </Text>
+                    </View>
+                    <Text style={[styles.paymentMethodDesc, { color: isDark ? '#ccc' : '#666' }]}>
+                      Bitcoin, USDT, Ethereum
+                    </Text>
+                    <Text style={[styles.paymentMethodFeature, { color: '#FF9800' }]}>
+                      ✓ Pagos descentralizados
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[
+                      styles.paymentIconButton,
+                      {
+                        backgroundColor: 'rgba(255,152,0,0.1)',
+                        borderWidth: 1,
+                        borderColor: '#FF9800',
+                      },
+                    ]}
+                    onPress={() => handleAlternativePayment('crypto')}
+                    disabled={loading}
+                  >
+                    <Image
+                      source={require('../../assets/images/payment-icons/bitcoin.png')}
+                      style={styles.paymentButtonIcon}
+                    />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Información de seguridad */}
+              <View
+                style={[styles.securityInfo, { backgroundColor: isDark ? '#1a1a1a' : '#f8f9fa' }]}
+              >
+                <MaterialIcons name="security" size={24} color="#4CAF50" />
+                <Text style={[styles.securityText, { color: isDark ? '#ccc' : '#666' }]}>
+                  Todos los pagos están protegidos con encriptación SSL de 256 bits
                 </Text>
               </View>
-              <TouchableOpacity
-                style={[styles.paymentIconButton, { backgroundColor: '#4CAF50' }]}
-                onPress={() => handleAlternativePayment('transfer')}
-                disabled={loading}
-              >
-                <MaterialIcons name="account-balance" size={28} color="#fff" />
-              </TouchableOpacity>
-            </View>
 
-            {/* OXXO */}
-            <View style={styles.paymentMethodRow}>
-              <View style={styles.paymentMethodInfo}>
-                <View style={styles.paymentMethodHeader}>
-                  <Image 
-                    source={require('../../assets/images/payment-icons/oxxo.png')} 
-                    style={styles.paymentHeaderIcon}
-                  />
-                  <Text style={[styles.paymentMethodName, { color: isDark ? '#fff' : '#000' }]}>
-                    OXXO
+              {/* Indicador de carga global */}
+              {loading && (
+                <View style={styles.loadingOverlay}>
+                  <ActivityIndicator size="large" color="#00b4d8" />
+                  <Text style={[styles.loadingText, { color: isDark ? '#fff' : '#000' }]}>
+                    Procesando pago...
                   </Text>
                 </View>
-                <Text style={[styles.paymentMethodDesc, { color: isDark ? '#ccc' : '#666' }]}>
-                  Pago en efectivo en tienda
-                </Text>
-                <Text style={[styles.paymentMethodFeature, { color: '#E91E63' }]}>
-                  ✓ Más de 20,000 tiendas
-                </Text>
-              </View>
-              <TouchableOpacity
-                style={[styles.paymentIconButton, { backgroundColor: 'rgba(233,30,99,0.1)', borderWidth: 1, borderColor: '#E91E63' }]}
-                onPress={() => handleAlternativePayment('oxxo')}
-                disabled={loading}
-              >
-                <Image 
-                  source={require('../../assets/images/payment-icons/oxxo.png')} 
-                  style={styles.paymentButtonIcon}
-                />
-              </TouchableOpacity>
-            </View>
-
-            {/* PayPal */}
-            <View style={styles.paymentMethodRow}>
-              <View style={styles.paymentMethodInfo}>
-                <View style={styles.paymentMethodHeader}>
-                  <Image 
-                    source={require('../../assets/images/payment-icons/paypal.png')} 
-                    style={styles.paymentHeaderIcon}
-                  />
-                  <Text style={[styles.paymentMethodName, { color: isDark ? '#fff' : '#000' }]}>
-                    PayPal
-                  </Text>
-                </View>
-                <Text style={[styles.paymentMethodDesc, { color: isDark ? '#ccc' : '#666' }]}>
-                  Pago internacional seguro
-                </Text>
-                <Text style={[styles.paymentMethodFeature, { color: '#0070ba' }]}>
-                  ✓ Protección del comprador
-                </Text>
-              </View>
-              <TouchableOpacity
-                style={[styles.paymentIconButton, { backgroundColor: 'rgba(0,112,186,0.1)', borderWidth: 1, borderColor: '#0070ba' }]}
-                onPress={() => handleAlternativePayment('paypal')}
-                disabled={loading}
-              >
-                <Image 
-                  source={require('../../assets/images/payment-icons/paypal.png')} 
-                  style={styles.paymentButtonIcon}
-                />
-              </TouchableOpacity>
-            </View>
-
-            {/* Criptomonedas */}
-            <View style={styles.paymentMethodRow}>
-              <View style={styles.paymentMethodInfo}>
-                <View style={styles.paymentMethodHeader}>
-                  <Image 
-                    source={require('../../assets/images/payment-icons/bitcoin.png')} 
-                    style={styles.paymentHeaderIcon}
-                  />
-                  <Text style={[styles.paymentMethodName, { color: isDark ? '#fff' : '#000' }]}>
-                    Criptomonedas
-                  </Text>
-                </View>
-                <Text style={[styles.paymentMethodDesc, { color: isDark ? '#ccc' : '#666' }]}>
-                  Bitcoin, USDT, Ethereum
-                </Text>
-                <Text style={[styles.paymentMethodFeature, { color: '#FF9800' }]}>
-                  ✓ Pagos descentralizados
-                </Text>
-              </View>
-              <TouchableOpacity
-                style={[styles.paymentIconButton, { backgroundColor: 'rgba(255,152,0,0.1)', borderWidth: 1, borderColor: '#FF9800' }]}
-                onPress={() => handleAlternativePayment('crypto')}
-                disabled={loading}
-              >
-                <Image 
-                  source={require('../../assets/images/payment-icons/bitcoin.png')} 
-                  style={styles.paymentButtonIcon}
-                />
-              </TouchableOpacity>
-            </View>
-
-          </View>
-
-          {/* Información de seguridad */}
-          <View style={[styles.securityInfo, { backgroundColor: isDark ? '#1a1a1a' : '#f8f9fa' }]}>
-            <MaterialIcons name="security" size={24} color="#4CAF50" />
-            <Text style={[styles.securityText, { color: isDark ? '#ccc' : '#666' }]}>
-              Todos los pagos están protegidos con encriptación SSL de 256 bits
-            </Text>
-          </View>
-
-          {/* Indicador de carga global */}
-          {loading && (
-            <View style={styles.loadingOverlay}>
-              <ActivityIndicator size="large" color="#00b4d8" />
-              <Text style={[styles.loadingText, { color: isDark ? '#fff' : '#000' }]}>
-                Procesando pago...
-              </Text>
-            </View>
               )}
             </>
           )}
-
         </ScrollView>
       </View>
     </>
@@ -863,7 +1053,7 @@ export default function PagoScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { 
+  container: {
     flex: 1,
   },
   content: {
@@ -1016,10 +1206,10 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 2,
   },
-  title: { 
-    fontSize: 22, 
-    fontWeight: 'bold', 
-    marginBottom: 24 
+  title: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    marginBottom: 24,
   },
   button: {
     width: '100%',

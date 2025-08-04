@@ -1,105 +1,105 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 import {
-    Animated,
-    Dimensions,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    useColorScheme,
-    View,
+  Animated,
+  Dimensions,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  useColorScheme,
+  View,
 } from 'react-native';
 
-interface PaymentNotificationProps {
+interface PaymentNotificationOverlayProps {
   show: boolean;
-  type: 'success' | 'error' | 'pending';
+  type: 'success' | 'error' | 'warning' | 'info';
   title: string;
   message: string;
   onHide: () => void;
+  autoHide?: boolean;
+  duration?: number;
 }
 
-const PaymentNotificationOverlay: React.FC<PaymentNotificationProps> = ({
+export default function PaymentNotificationOverlay({
   show,
   type,
   title,
   message,
   onHide,
-}) => {
-  const slideAnim = useRef(new Animated.Value(-200)).current;
-  const opacityAnim = useRef(new Animated.Value(0)).current;
+  autoHide = true,
+  duration = 5000,
+}: PaymentNotificationOverlayProps) {
   const scheme = useColorScheme();
   const isDark = scheme === 'dark';
-  const { width } = Dimensions.get('window');
+  const opacity = React.useRef(new Animated.Value(0)).current;
+  const translateY = React.useRef(new Animated.Value(-100)).current;
 
   useEffect(() => {
     if (show) {
-      // Animación de entrada
+      // Animar entrada
       Animated.parallel([
-        Animated.spring(slideAnim, {
-          toValue: 50,
-          useNativeDriver: true,
-          tension: 100,
-          friction: 8,
-        }),
-        Animated.timing(opacityAnim, {
+        Animated.timing(opacity, {
           toValue: 1,
           duration: 300,
           useNativeDriver: true,
         }),
-      ]).start();
-    } else {
-      // Animación de salida
-      Animated.parallel([
-        Animated.timing(slideAnim, {
-          toValue: -200,
-          duration: 250,
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacityAnim, {
+        Animated.timing(translateY, {
           toValue: 0,
-          duration: 250,
+          duration: 300,
           useNativeDriver: true,
         }),
       ]).start();
+
+      // Auto-ocultar después del tiempo especificado
+      if (autoHide) {
+        const timer = setTimeout(() => {
+          hideNotification();
+        }, duration);
+
+        return () => clearTimeout(timer);
+      }
     }
   }, [show]);
 
-  const getNotificationStyle = () => {
+  const hideNotification = () => {
+    Animated.parallel([
+      Animated.timing(opacity, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateY, {
+        toValue: -100,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      onHide();
+    });
+  };
+
+  const getNotificationColor = () => {
     switch (type) {
       case 'success':
-        return {
-          backgroundColor: isDark ? '#1d4e1f' : '#d4edda',
-          borderColor: '#28a745',
-          iconColor: '#28a745',
-        };
+        return '#4CAF50';
       case 'error':
-        return {
-          backgroundColor: isDark ? '#4e1d1d' : '#f8d7da',
-          borderColor: '#dc3545',
-          iconColor: '#dc3545',
-        };
-      case 'pending':
-        return {
-          backgroundColor: isDark ? '#1d3a4e' : '#d1ecf1',
-          borderColor: '#17a2b8',
-          iconColor: '#17a2b8',
-        };
+        return '#f44336';
+      case 'warning':
+        return '#FF9800';
+      case 'info':
       default:
-        return {
-          backgroundColor: isDark ? '#2a2a2a' : '#f8f9fa',
-          borderColor: '#6c757d',
-          iconColor: '#6c757d',
-        };
+        return '#2196F3';
     }
   };
 
-  const getIcon = () => {
+  const getNotificationIcon = () => {
     switch (type) {
       case 'success':
         return '✅';
       case 'error':
         return '❌';
-      case 'pending':
-        return '⏳';
+      case 'warning':
+        return '⚠️';
+      case 'info':
       default:
         return 'ℹ️';
     }
@@ -107,86 +107,87 @@ const PaymentNotificationOverlay: React.FC<PaymentNotificationProps> = ({
 
   if (!show) return null;
 
-  const notificationStyle = getNotificationStyle();
-
   return (
-    <View style={styles.overlay}>
-      <Animated.View
+    <Animated.View
+      style={[
+        styles.overlay,
+        {
+          opacity,
+          transform: [{ translateY }],
+        },
+      ]}
+    >
+      <TouchableOpacity
         style={[
           styles.notification,
           {
-            backgroundColor: notificationStyle.backgroundColor,
-            borderColor: notificationStyle.borderColor,
-            width: width - 40,
-            transform: [{ translateY: slideAnim }],
-            opacity: opacityAnim,
+            backgroundColor: isDark ? '#333' : '#fff',
+            borderLeftColor: getNotificationColor(),
+            shadowColor: isDark ? '#000' : '#000',
           },
         ]}
+        onPress={hideNotification}
+        activeOpacity={0.9}
       >
-        <TouchableOpacity
-          style={styles.notificationContent}
-          onPress={onHide}
-          activeOpacity={0.9}
-        >
-          <View style={styles.iconContainer}>
-            <Text style={styles.icon}>{getIcon()}</Text>
-          </View>
-          
-          <View style={styles.textContainer}>
-            <Text
-              style={[
-                styles.title,
-                { color: isDark ? '#fff' : '#000' }
-              ]}
-            >
-              {title}
-            </Text>
-            <Text
-              style={[
-                styles.message,
-                { color: isDark ? '#ccc' : '#555' }
-              ]}
-            >
-              {message}
-            </Text>
-          </View>
+        <View style={styles.iconContainer}>
+          <Text style={styles.icon}>{getNotificationIcon()}</Text>
+        </View>
 
-          <View style={styles.dismissContainer}>
-            <Text style={[styles.dismissText, { color: notificationStyle.iconColor }]}>
-              Tocar para cerrar
-            </Text>
-          </View>
+        <View style={styles.content}>
+          <Text
+            style={[
+              styles.title,
+              {
+                color: isDark ? '#fff' : '#000',
+              },
+            ]}
+          >
+            {title}
+          </Text>
+          <Text
+            style={[
+              styles.message,
+              {
+                color: isDark ? '#ccc' : '#666',
+              },
+            ]}
+          >
+            {message}
+          </Text>
+        </View>
+
+        <TouchableOpacity style={styles.closeButton} onPress={hideNotification}>
+          <Text style={[styles.closeText, { color: isDark ? '#ccc' : '#999' }]}>✕</Text>
         </TouchableOpacity>
-      </Animated.View>
-    </View>
+      </TouchableOpacity>
+    </Animated.View>
   );
-};
+}
+
+const { width } = Dimensions.get('window');
 
 const styles = StyleSheet.create({
   overlay: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 1000,
-    pointerEvents: 'box-none',
-    alignItems: 'center',
+    top: 50,
+    left: 20,
+    right: 20,
+    zIndex: 9999,
+    elevation: 1000,
   },
   notification: {
+    backgroundColor: '#fff',
     borderRadius: 12,
-    borderWidth: 1,
-    shadowColor: '#000',
+    borderLeftWidth: 5,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
-    elevation: 10,
-    marginHorizontal: 20,
-  },
-  notificationContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
+    elevation: 8,
+    maxWidth: width - 40,
   },
   iconContainer: {
     marginRight: 12,
@@ -194,9 +195,8 @@ const styles = StyleSheet.create({
   icon: {
     fontSize: 24,
   },
-  textContainer: {
+  content: {
     flex: 1,
-    marginRight: 8,
   },
   title: {
     fontSize: 16,
@@ -205,15 +205,14 @@ const styles = StyleSheet.create({
   },
   message: {
     fontSize: 14,
-    lineHeight: 18,
+    lineHeight: 20,
   },
-  dismissContainer: {
-    alignItems: 'center',
+  closeButton: {
+    marginLeft: 12,
+    padding: 4,
   },
-  dismissText: {
-    fontSize: 12,
-    fontWeight: '500',
+  closeText: {
+    fontSize: 18,
+    fontWeight: 'bold',
   },
 });
-
-export default PaymentNotificationOverlay;

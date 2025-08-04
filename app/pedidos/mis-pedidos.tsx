@@ -14,42 +14,64 @@ import {
 } from 'react-native';
 // 🔧 IMPORTACIONES CORREGIDAS
 // Temporary apiRequest function until lib/api.ts exports are fixed
-const apiRequest = async (endpoint: string, options: {
-  method?: string;
-  token?: string;
-} = {}) => {
+const apiRequest = async (
+  endpoint: string,
+  options: {
+    method?: string;
+    token?: string;
+  } = {}
+) => {
   const { method = 'GET', token } = options;
-  
-  const url = `https://2667b7e4b7b2.ngrok-free.app${endpoint}`;
+
+  // 🔧 CONFIGURACIÓN AUTOMÁTICA DE URL
+  let baseUrl =
+    process.env.EXPO_PUBLIC_NGROK_URL || process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+
+  // 🚨 FALLBACK URL SI LAS VARIABLES NO FUNCIONAN (ACTUALIZADA)
+  const FALLBACK_NGROK_URL = 'https://aca21624c99b.ngrok-free.app';
+
+  // 🌐 DETECCIÓN AUTOMÁTICA DE ENTORNO
+  if (!process.env.EXPO_PUBLIC_NGROK_URL && !process.env.EXPO_PUBLIC_API_URL) {
+    console.log('⚠️ Variables de entorno no disponibles en mis-pedidos, usando fallback');
+    baseUrl = FALLBACK_NGROK_URL;
+  }
+
+  const url = `${baseUrl}${endpoint}`;
+  console.log('🔗 URL Base detectada en mis-pedidos:', baseUrl);
+  console.log('🔍 Variables disponibles mis-pedidos:', {
+    NGROK: process.env.EXPO_PUBLIC_NGROK_URL,
+    API: process.env.EXPO_PUBLIC_API_URL,
+  });
+
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'ngrok-skip-browser-warning': 'true',
   };
-  
+
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
-  
+
   console.log('🌐 API Request:', { url, method, hasToken: !!token });
-  
+
   const response = await fetch(url, { method, headers });
   const data = await response.json();
-  
+
   return { response, data };
 };
 
 /**
  * 🛒 COMPONENTE: MisPedidosScreen
- * 
+ *
  * ¿QUÉ HACE?: Muestra la lista de pedidos del usuario autenticado
- * 
+ *
  * FLUJO COMPLETO:
  * 1. Obtiene token del usuario desde AsyncStorage
  * 2. Hace petición al backend: GET /api/orders con Authorization header
  * 3. Backend usa auth.middleware.js para verificar token
  * 4. Backend llama a orders.controller.js para obtener pedidos del usuario
  * 5. Muestra los pedidos en una lista
- * 
+ *
  * CONEXIÓN EXACTA:
  * mis-pedidos.tsx → lib/api.ts → Backend → auth.middleware.js → orders.controller.js → Base de datos
  */
@@ -96,9 +118,9 @@ export default function MisPedidosScreen() {
 
   /**
    * 🔍 FUNCIÓN: fetchOrders
-   * 
+   *
    * ¿QUÉ HACE?: Obtiene los pedidos del usuario autenticado desde el backend
-   * 
+   *
    * FLUJO:
    * 1. Obtiene token de AsyncStorage
    * 2. Llama al endpoint /api/orders con autenticación
@@ -128,13 +150,13 @@ export default function MisPedidosScreen() {
       if (response.ok && data) {
         // 📦 PROCESAR RESPUESTA DEL BACKEND
         // El backend debe devolver un array de órdenes o un objeto con órdenes
-        const ordersArray = Array.isArray(data) ? data : (data.orders || data.data || []);
+        const ordersArray = Array.isArray(data) ? data : data.orders || data.data || [];
         console.log('✅ Pedidos obtenidos:', ordersArray.length);
         console.log('📦 Órdenes:', ordersArray);
         setOrders(ordersArray);
       } else {
         console.error('❌ Error al obtener pedidos:', response.status, data);
-        
+
         // Si es error 401 (no autorizado), limpiar sesión
         if (response.status === 401) {
           console.log('🔄 Token inválido, limpiando sesión...');
@@ -142,7 +164,7 @@ export default function MisPedidosScreen() {
           router.push('/');
           return;
         }
-        
+
         setOrders([]);
       }
     } catch (error) {
@@ -215,11 +237,11 @@ export default function MisPedidosScreen() {
   if (loading) {
     return (
       <>
-        <Stack.Screen 
-          options={{ 
+        <Stack.Screen
+          options={{
             title: 'Mis Pedidos',
-            headerShown: true 
-          }} 
+            headerShown: true,
+          }}
         />
         <View style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}>
           <View style={styles.loadingContainer}>
@@ -235,14 +257,14 @@ export default function MisPedidosScreen() {
 
   return (
     <>
-      <Stack.Screen 
-        options={{ 
+      <Stack.Screen
+        options={{
           title: 'Mis Pedidos',
-          headerShown: true 
-        }} 
+          headerShown: true,
+        }}
       />
       <View style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}>
-        <ScrollView 
+        <ScrollView
           style={styles.content}
           refreshControl={
             <RefreshControl
@@ -266,96 +288,96 @@ export default function MisPedidosScreen() {
             </View>
           ) : (
             orders.map((order) => (
-            <View
-              key={order.id}
-              style={[
-                styles.orderCard,
-                {
-                  backgroundColor: isDark ? '#222' : '#f5f5f5',
-                  borderColor: isDark ? '#444' : '#ddd',
-                },
-              ]}
-            >
-              {/* Header del pedido */}
-              <View style={styles.orderHeader}>
-                <View>
-                  <Text style={[styles.orderNumber, { color: isDark ? '#fff' : '#000' }]}>
-                    Pedido #{order.id}
-                  </Text>
-                  <Text style={[styles.orderDate, { color: isDark ? '#ccc' : '#666' }]}>
-                    {formatDate(order.createdAt)}
-                  </Text>
-                </View>
-                <View
-                  style={[styles.statusBadge, { backgroundColor: getStatusColor(order.status) }]}
-                >
-                  <Text style={styles.statusText}>{getStatusText(order.status)}</Text>
-                </View>
-              </View>
-
-              {/* Productos del pedido */}
-              <View style={styles.orderProducts}>
-                {order.orderItems.slice(0, 2).map((item, index) => (
-                  <View key={index} style={styles.productRow}>
-                    <Image
-                      source={
-                        item.product.imageUrl
-                          ? { uri: item.product.imageUrl }
-                          : require('../../assets/images/shirt1.png')
-                      }
-                      style={styles.productImage}
-                      defaultSource={require('../../assets/images/shirt1.png')}
-                    />
-                    <View style={styles.productInfo}>
-                      <Text style={[styles.productName, { color: isDark ? '#fff' : '#000' }]}>
-                        {item.product.name}
-                      </Text>
-                      <Text style={[styles.productDetails, { color: isDark ? '#ccc' : '#666' }]}>
-                        Cantidad: {item.quantity} | ${item.price} MXN
-                      </Text>
-                    </View>
+              <View
+                key={order.id}
+                style={[
+                  styles.orderCard,
+                  {
+                    backgroundColor: isDark ? '#222' : '#f5f5f5',
+                    borderColor: isDark ? '#444' : '#ddd',
+                  },
+                ]}
+              >
+                {/* Header del pedido */}
+                <View style={styles.orderHeader}>
+                  <View>
+                    <Text style={[styles.orderNumber, { color: isDark ? '#fff' : '#000' }]}>
+                      Pedido #{order.id}
+                    </Text>
+                    <Text style={[styles.orderDate, { color: isDark ? '#ccc' : '#666' }]}>
+                      {formatDate(order.createdAt)}
+                    </Text>
                   </View>
-                ))}
-                {order.orderItems.length > 2 && (
-                  <Text style={[styles.moreProducts, { color: isDark ? '#ccc' : '#666' }]}>
-                    +{order.orderItems.length - 2} productos más
-                  </Text>
-                )}
-              </View>
+                  <View
+                    style={[styles.statusBadge, { backgroundColor: getStatusColor(order.status) }]}
+                  >
+                    <Text style={styles.statusText}>{getStatusText(order.status)}</Text>
+                  </View>
+                </View>
 
-              {/* Total y acciones */}
-              <View style={styles.orderFooter}>
-                <View>
-                  <Text style={[styles.orderTotal, { color: isDark ? '#fff' : '#000' }]}>
-                    Total: ${order.total} MXN
-                  </Text>
-                  {order.payments && order.payments.length > 0 && (
-                    <Text style={[styles.paymentInfo, { color: isDark ? '#ccc' : '#666' }]}>
-                      Pago: {order.payments[0].provider} ({order.payments[0].status})
+                {/* Productos del pedido */}
+                <View style={styles.orderProducts}>
+                  {order.orderItems.slice(0, 2).map((item, index) => (
+                    <View key={index} style={styles.productRow}>
+                      <Image
+                        source={
+                          item.product.imageUrl
+                            ? { uri: item.product.imageUrl }
+                            : require('../../assets/images/shirt1.png')
+                        }
+                        style={styles.productImage}
+                        defaultSource={require('../../assets/images/shirt1.png')}
+                      />
+                      <View style={styles.productInfo}>
+                        <Text style={[styles.productName, { color: isDark ? '#fff' : '#000' }]}>
+                          {item.product.name}
+                        </Text>
+                        <Text style={[styles.productDetails, { color: isDark ? '#ccc' : '#666' }]}>
+                          Cantidad: {item.quantity} | ${item.price} MXN
+                        </Text>
+                      </View>
+                    </View>
+                  ))}
+                  {order.orderItems.length > 2 && (
+                    <Text style={[styles.moreProducts, { color: isDark ? '#ccc' : '#666' }]}>
+                      +{order.orderItems.length - 2} productos más
                     </Text>
                   )}
                 </View>
-                <TouchableOpacity
-                  style={[styles.detailButton, { borderColor: isDark ? '#fff' : '#000' }]}
-                  onPress={() => {
-                    // Navegar a una pantalla de detalles específica del pedido
-                    router.push({
-                      pathname: '/pedidos/detalle-pedido',
-                      params: { 
-                        orderId: order.id,
-                        status: order.status,
-                        total: order.total,
-                        createdAt: order.createdAt
-                      },
-                    });
-                  }}
-                >
-                  <Text style={[styles.detailButtonText, { color: isDark ? '#fff' : '#000' }]}>
-                    Ver Detalles
-                  </Text>
-                </TouchableOpacity>
+
+                {/* Total y acciones */}
+                <View style={styles.orderFooter}>
+                  <View>
+                    <Text style={[styles.orderTotal, { color: isDark ? '#fff' : '#000' }]}>
+                      Total: ${order.total} MXN
+                    </Text>
+                    {order.payments && order.payments.length > 0 && (
+                      <Text style={[styles.paymentInfo, { color: isDark ? '#ccc' : '#666' }]}>
+                        {order.payments[0].provider} ({order.payments[0].status})
+                      </Text>
+                    )}
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.detailButton, { borderColor: isDark ? '#fff' : '#000' }]}
+                    onPress={() => {
+                      // Navegar a una pantalla de detalles específica del pedido
+                      router.push({
+                        pathname: '/pedidos/detalle-pedido',
+                        params: {
+                          orderId: order.id,
+                          status: order.status,
+                          total: order.total,
+                          createdAt: order.createdAt,
+                        },
+                      });
+                    }}
+                  >
+                    <Text style={[styles.detailButtonText, { color: isDark ? '#fff' : '#000' }]}>
+                      Ver Detalles
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
-            </View>
             ))
           )}
         </ScrollView>

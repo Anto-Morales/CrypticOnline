@@ -3,7 +3,6 @@ import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-rou
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   RefreshControl,
   ScrollView,
@@ -18,49 +17,71 @@ import { MaterialIcons } from '@expo/vector-icons';
 
 /**
  * 🔍 COMPONENTE: DetallePedidoScreen
- * 
+ *
  * ¿QUÉ HACE?: Muestra los detalles completos de un pedido específico
- * 
+ *
  * FLUJO COMPLETO:
  * 1. Recibe orderId como parámetro de la URL
  * 2. Hace petición al backend: GET /api/orders/{orderId} con token
  * 3. Backend verifica autenticación y devuelve detalles del pedido
  * 4. Muestra productos, estado de pago, total, etc.
  * 5. Permite verificar estado de pago y actualizar manualmente
- * 
+ *
  * CONEXIÓN EXACTA:
  * detalle-pedido.tsx → lib/api.ts → Backend → auth.middleware.js → orders.controller.js → Base de datos
  */
 
 // 🔧 Función temporal de apiRequest hasta que se arregle lib/api.ts
-const apiRequest = async (endpoint: string, options: {
-  method?: string;
-  headers?: Record<string, string>;
-  body?: string;
-} = {}) => {
+const apiRequest = async (
+  endpoint: string,
+  options: {
+    method?: string;
+    headers?: Record<string, string>;
+    body?: string;
+  } = {}
+) => {
   const { method = 'GET', headers = {}, body } = options;
-  
-  const url = `https://2667b7e4b7b2.ngrok-free.app${endpoint}`;
+
+  // 🔧 CONFIGURACIÓN AUTOMÁTICA DE URL
+  let baseUrl =
+    process.env.EXPO_PUBLIC_NGROK_URL || process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+
+  // 🚨 FALLBACK URL SI LAS VARIABLES NO FUNCIONAN (ACTUALIZADA)
+  const FALLBACK_NGROK_URL = 'https://aca21624c99b.ngrok-free.app';
+
+  // 🌐 DETECCIÓN AUTOMÁTICA DE ENTORNO
+  if (!process.env.EXPO_PUBLIC_NGROK_URL && !process.env.EXPO_PUBLIC_API_URL) {
+    console.log('⚠️ Variables de entorno no disponibles en detalle-pedido, usando fallback');
+    baseUrl = FALLBACK_NGROK_URL;
+  }
+
+  const url = `${baseUrl}${endpoint}`;
+  console.log('🔗 URL Base detectada en detalle-pedido:', baseUrl);
+  console.log('🔍 Variables disponibles detalle-pedido:', {
+    NGROK: process.env.EXPO_PUBLIC_NGROK_URL,
+    API: process.env.EXPO_PUBLIC_API_URL,
+  });
+
   const defaultHeaders = {
     'Content-Type': 'application/json',
     'ngrok-skip-browser-warning': 'true',
     ...headers,
   };
-  
+
   console.log('🌐 API Request:', { url, method, hasAuth: !!headers['Authorization'] });
-  
+
   const config: RequestInit = {
     method,
     headers: defaultHeaders,
   };
-  
+
   if (body && method !== 'GET') {
     config.body = body;
   }
-  
+
   const response = await fetch(url, config);
   const data = await response.json();
-  
+
   return { response, data };
 };
 
@@ -70,7 +91,7 @@ interface OrderDetail {
   total: number;
   createdAt: string;
   paidAt: string | null;
-  orderItems: Array<{
+  orderItems: {
     id: number;
     quantity: number;
     price: number;
@@ -78,7 +99,7 @@ interface OrderDetail {
       name: string;
       imageUrl: string;
     };
-  }>;
+  }[];
   payment?: {
     status: string;
     method: string;
@@ -99,9 +120,9 @@ export default function DetallePedidoScreen() {
 
   /**
    * 🔍 FUNCIÓN: fetchOrderDetail
-   * 
+   *
    * ¿QUÉ HACE?: Obtiene los detalles completos de un pedido específico
-   * 
+   *
    * FLUJO:
    * 1. Obtiene token de AsyncStorage
    * 2. Llama al endpoint /api/orders/{orderId} con autenticación
@@ -123,7 +144,7 @@ export default function DetallePedidoScreen() {
       // MÉTODO: GET con Authorization header
       const { response, data } = await apiRequest(`/api/orders/${params.orderId}`, {
         method: 'GET',
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
 
       console.log('📡 Respuesta del backend:', { status: response.status, data });
@@ -135,7 +156,7 @@ export default function DetallePedidoScreen() {
         setOrder(orderData);
       } else {
         console.error('❌ Error al obtener detalles:', response.status, data);
-        
+
         // Si es error 401 (no autorizado), limpiar sesión
         if (response.status === 401) {
           console.log('🔄 Token inválido, limpiando sesión...');
@@ -168,9 +189,9 @@ export default function DetallePedidoScreen() {
 
   /**
    * 🔍 FUNCIÓN: checkPaymentStatus
-   * 
+   *
    * ¿QUÉ HACE?: Verifica el estado actual del pago en MercadoPago
-   * 
+   *
    * FLUJO:
    * 1. Llama al backend para verificar estado del pago
    * 2. Backend consulta la API de MercadoPago
@@ -188,7 +209,7 @@ export default function DetallePedidoScreen() {
       // RUTA: https://tu-ngrok.app/api/payments/check/{orderId}
       const { response, data } = await apiRequest(`/api/payments/check/${orderId}`, {
         method: 'GET',
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
 
       if (response.ok && data) {
@@ -208,10 +229,10 @@ export default function DetallePedidoScreen() {
 
   const handleCheckPayment = async () => {
     if (!order) return;
-    
+
     console.log('🔄 Verificando estado de pago manualmente...');
     const updatedOrder = await checkPaymentStatus(order.id);
-    
+
     if (updatedOrder) {
       setOrder(updatedOrder);
       console.log('✅ Orden actualizada con nuevo estado');
@@ -220,9 +241,9 @@ export default function DetallePedidoScreen() {
 
   /**
    * 🛠️ FUNCIÓN: handleManualUpdate
-   * 
+   *
    * ¿QUÉ HACE?: Permite marcar manualmente un pedido como pagado (para testing)
-   * 
+   *
    * FLUJO:
    * 1. Llama al backend para actualizar estado manualmente
    * 2. Backend marca el pedido como PAID
@@ -230,10 +251,10 @@ export default function DetallePedidoScreen() {
    */
   const handleManualUpdate = async () => {
     if (!order) return;
-    
+
     try {
       console.log('🔧 Actualizando estado manualmente...');
-      
+
       const token = await AsyncStorage.getItem('token');
       if (!token) return;
 
@@ -242,10 +263,10 @@ export default function DetallePedidoScreen() {
       const { response, data } = await apiRequest(`/api/orders/manual/${order.id}`, {
         method: 'PATCH',
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ status: 'PAID' })
+        body: JSON.stringify({ status: 'PAID' }),
       });
 
       if (response.ok && data.success) {
@@ -261,9 +282,9 @@ export default function DetallePedidoScreen() {
 
   /**
    * 💳 FUNCIÓN: handlePaymentMethod
-   * 
+   *
    * ¿QUÉ HACE?: Redirige a la pantalla de pago con el método preseleccionado
-   * 
+   *
    * FLUJO:
    * 1. Toma el orderId existente y el método seleccionado
    * 2. Redirige a la pantalla de pago con parámetros especiales
@@ -272,50 +293,70 @@ export default function DetallePedidoScreen() {
    */
   const handlePaymentMethod = (method: string) => {
     if (!order) return;
-    
+
     console.log('💳 Método de pago seleccionado:', method, 'para pedido:', order.id);
-    
+
+    // 🎯 CALCULAR TOTAL CON ENVÍO INCLUIDO
+    const itemsTotal = order.orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    const shippingCost = 50; // Mismo costo que se usa en carrito.tsx
+    const totalWithShipping = itemsTotal + shippingCost;
+
+    console.log('💰 RETRY - Cálculo de totales:', {
+      itemsTotal,
+      shippingCost,
+      totalWithShipping,
+      orderTotal: order.total,
+    });
+
     // 🎯 REDIRIGIR A LA PANTALLA DE PAGO CORRECTA CON PARÁMETROS ESPECIALES
     // La pantalla de pago recibirá estos parámetros y ejecutará directamente el método
     router.push({
       pathname: '/pago/pago', // 🔧 CORREGIDO: Redirigir a la pantalla de pago correcta
-      params: { 
+      params: {
         // Datos del pedido existente
         orderId: order.id,
-        total: order.total,
-        
+        total: order.total, // Usar el total original de la orden
+
         // Parámetros especiales para indicar que es un retry
         isRetry: 'true', // Indica que es un pago de pedido existente
         selectedMethod: method, // Método preseleccionado por el usuario
         autoExecute: 'true', // Indica que debe ejecutar automáticamente el pago
-        
+
+        // 🚚 DATOS DE ENVÍO PARA EL RETRY
+        shippingCost: shippingCost.toString(),
+        subtotal: itemsTotal.toString(),
+
         // Datos adicionales por si se necesitan
         orderItems: JSON.stringify(order.orderItems),
-        orderStatus: order.status
-      }
+        orderStatus: order.status,
+
+        // 🎯 METADATOS IMPORTANTES PARA EVITAR DUPLICAR ÓRDENES
+        retryExistingOrder: 'true',
+        doNotCreateNewOrder: 'true',
+      },
     });
   };
 
   /**
    * ❌ FUNCIÓN: handleCancelOrder
-   * 
+   *
    * ¿QUÉ HACE?: Cancela el pedido pendiente
    */
   const handleCancelOrder = async () => {
     if (!order) return;
-    
+
     try {
       console.log('❌ Cancelando pedido:', order.id);
-      
+
       const token = await AsyncStorage.getItem('token');
       if (!token) return;
 
       const { response, data } = await apiRequest(`/api/orders/${order.id}/cancel`, {
         method: 'PATCH',
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
       });
 
       if (response.ok && data.success) {
@@ -347,13 +388,13 @@ export default function DetallePedidoScreen() {
   const getStatusText = (status: string) => {
     switch (status) {
       case 'PAID':
-        return 'Pagado y Confirmado ✅';
+        return 'Pagado y Confirmado';
       case 'PENDING':
-        return 'Pago Pendiente ⏳';
+        return 'Pago Pendiente';
       case 'CANCELLED':
         return 'Cancelado';
       case 'FAILED':
-        return 'Pago Fallido ❌';
+        return 'Pago Fallido';
       default:
         return status;
     }
@@ -385,11 +426,11 @@ export default function DetallePedidoScreen() {
   if (loading) {
     return (
       <>
-        <Stack.Screen 
-          options={{ 
+        <Stack.Screen
+          options={{
             title: `Pedido #${params.orderId}`,
-            headerShown: true 
-          }} 
+            headerShown: true,
+          }}
         />
         <View style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}>
           <View style={styles.loadingContainer}>
@@ -406,11 +447,11 @@ export default function DetallePedidoScreen() {
   if (!order) {
     return (
       <>
-        <Stack.Screen 
-          options={{ 
+        <Stack.Screen
+          options={{
             title: `Pedido #${params.orderId}`,
-            headerShown: true 
-          }} 
+            headerShown: true,
+          }}
         />
         <View style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}>
           <View style={styles.errorContainer}>
@@ -428,14 +469,14 @@ export default function DetallePedidoScreen() {
 
   return (
     <>
-      <Stack.Screen 
-        options={{ 
+      <Stack.Screen
+        options={{
           title: `Pedido #${params.orderId}`,
-          headerShown: true 
-        }} 
+          headerShown: true,
+        }}
       />
       <View style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}>
-        <ScrollView 
+        <ScrollView
           style={styles.content}
           refreshControl={
             <RefreshControl
@@ -445,344 +486,408 @@ export default function DetallePedidoScreen() {
             />
           }
         >
-        {/* Estado del pedido */}
-        <View style={[styles.section, { backgroundColor: isDark ? '#222' : '#f5f5f5' }]}>
-          <Text style={[styles.sectionTitle, { color: isDark ? '#fff' : '#000' }]}>
-            Estado del Pedido
-          </Text>
-          <View style={styles.statusContainer}>
-            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(order.status) }]}>
-              <Text style={styles.statusText}>{getStatusText(order.status)}</Text>
-            </View>
-            <Text style={[styles.statusDate, { color: isDark ? '#ccc' : '#666' }]}>
-              Creado: {formatDate(order.createdAt)}
+          {/* Estado del pedido */}
+          <View style={[styles.section, { backgroundColor: isDark ? '#222' : '#f5f5f5' }]}>
+            <Text style={[styles.sectionTitle, { color: isDark ? '#fff' : '#000' }]}>
+              Estado del Pedido
             </Text>
-            {order.paidAt && (
+            <View style={styles.statusContainer}>
+              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(order.status) }]}>
+                <Text style={styles.statusText}>{getStatusText(order.status)}</Text>
+              </View>
               <Text style={[styles.statusDate, { color: isDark ? '#ccc' : '#666' }]}>
-                Pagado: {formatDate(order.paidAt)}
+                Creado: {formatDate(order.createdAt)}
+              </Text>
+              {order.paidAt && (
+                <Text style={[styles.statusDate, { color: isDark ? '#ccc' : '#666' }]}>
+                  Pagado: {formatDate(order.paidAt)}
+                </Text>
+              )}
+            </View>
+          </View>
+
+          {/* Información de pago */}
+          <View style={[styles.section, { backgroundColor: isDark ? '#222' : '#f5f5f5' }]}>
+            <Text style={[styles.sectionTitle, { color: isDark ? '#fff' : '#000' }]}>
+              Estado del Pago
+            </Text>
+            <Text style={[styles.paymentInfo, { color: isDark ? '#ccc' : '#666' }]}>
+              {order.status === 'PAID'
+                ? 'Pago completado con éxito'
+                : order.payment
+                  ? getPaymentStatusText(order.payment.status)
+                  : order.status === 'PENDING'
+                    ? 'Pago pendiente. \nSi ya has realizado el pago, dependiendo el metodo de pago puede tardar hasta 24 horas en reflejarse.'
+                    : 'Pago no procesado, por favor verifica tu método de pago o prueba con otro método.'}
+            </Text>
+            {(order.payment || order.status === 'PAID') && (
+              <Text style={[styles.paymentMethod, { color: isDark ? '#ccc' : '#666' }]}>
+                Método: {order.payment?.method || 'MercadoPago'}
               </Text>
             )}
           </View>
-        </View>
 
-        {/* Información de pago */}
-        <View style={[styles.section, { backgroundColor: isDark ? '#222' : '#f5f5f5' }]}>
-          <Text style={[styles.sectionTitle, { color: isDark ? '#fff' : '#000' }]}>
-            Estado del Pago
-          </Text>
-          <Text style={[styles.paymentInfo, { color: isDark ? '#ccc' : '#666' }]}>
-            {order.status === 'PAID' 
-              ? 'Pago completado con éxito' 
-              : order.payment 
-                ? getPaymentStatusText(order.payment.status) 
-                : order.status === 'PENDING' 
-                  ? 'Pago pendiente. \nSi ya has realizado el pago, dependiendo el metodo de pago puede tardar hasta 24 horas en reflejarse.'
-                  : 'Pago no procesado, por favor verifica tu método de pago o prueba con otro método.'
-            }
-          </Text>
-          {(order.payment || order.status === 'PAID') && (
-            <Text style={[styles.paymentMethod, { color: isDark ? '#ccc' : '#666' }]}>
-              Método: {order.payment?.method || 'MercadoPago'}
+          {/* Productos */}
+          <View style={[styles.section, { backgroundColor: isDark ? '#222' : '#f5f5f5' }]}>
+            <Text style={[styles.sectionTitle, { color: isDark ? '#fff' : '#000' }]}>
+              Productos
             </Text>
-          )}
-        </View>
+            {order.orderItems.map((item, index) => (
+              <View key={index} style={styles.productRow}>
+                <Image
+                  source={
+                    item.product.imageUrl
+                      ? { uri: item.product.imageUrl }
+                      : require('../../assets/images/shirt1.png')
+                  }
+                  style={styles.productImage}
+                  defaultSource={require('../../assets/images/shirt1.png')}
+                />
+                <View style={styles.productInfo}>
+                  <Text style={[styles.productName, { color: isDark ? '#fff' : '#000' }]}>
+                    {item.product.name}
+                  </Text>
+                  <Text style={[styles.productDetails, { color: isDark ? '#ccc' : '#666' }]}>
+                    Cantidad: {item.quantity} unidades
+                  </Text>
+                  <Text style={[styles.productPrice, { color: isDark ? '#fff' : '#000' }]}>
+                    Precio unitario: ${item.price} MXN
+                  </Text>
+                  <Text style={[styles.productSubtotal, { color: isDark ? '#4CAF50' : '#2E7D32' }]}>
+                    Subtotal: ${(item.price * item.quantity).toFixed(2)} MXN
+                  </Text>
+                </View>
+                <Text style={[styles.productTotal, { color: isDark ? '#fff' : '#000' }]}>
+                  ${(item.price * item.quantity).toFixed(2)} MXN
+                </Text>
+              </View>
+            ))}
 
-        {/* Productos */}
-        <View style={[styles.section, { backgroundColor: isDark ? '#222' : '#f5f5f5' }]}>
-          <Text style={[styles.sectionTitle, { color: isDark ? '#fff' : '#000' }]}>
-            Productos
-          </Text>
-          {order.orderItems.map((item, index) => (
-            <View key={index} style={styles.productRow}>
-              <Image
-                source={
-                  item.product.imageUrl
-                    ? { uri: item.product.imageUrl }
-                    : require('../../assets/images/shirt1.png')
-                }
-                style={styles.productImage}
-                defaultSource={require('../../assets/images/shirt1.png')}
-              />
+            {/* Agregar costo de envío si aplica */}
+            <View style={[styles.productRow, styles.shippingRow]}>
+              <View style={[styles.shippingIcon, { backgroundColor: isDark ? '#444' : '#e0e0e0' }]}>
+                <Text style={[styles.shippingText, { color: isDark ? '#fff' : '#000' }]}>📦</Text>
+              </View>
               <View style={styles.productInfo}>
                 <Text style={[styles.productName, { color: isDark ? '#fff' : '#000' }]}>
-                  {item.product.name}
+                  Costo de envío
                 </Text>
                 <Text style={[styles.productDetails, { color: isDark ? '#ccc' : '#666' }]}>
-                  Cantidad: {item.quantity} unidades
-                </Text>
-                <Text style={[styles.productPrice, { color: isDark ? '#fff' : '#000' }]}>
-                  Precio unitario: ${item.price} MXN
-                </Text>
-                <Text style={[styles.productSubtotal, { color: isDark ? '#4CAF50' : '#2E7D32' }]}>
-                  Subtotal: ${(item.price * item.quantity).toFixed(2)} MXN
+                  Envío estándar
                 </Text>
               </View>
               <Text style={[styles.productTotal, { color: isDark ? '#fff' : '#000' }]}>
-                ${(item.price * item.quantity).toFixed(2)} MXN
+                $50.00 MXN
               </Text>
             </View>
-          ))}
-          
-          {/* Agregar costo de envío si aplica */}
-          <View style={[styles.productRow, styles.shippingRow]}>
-            <View style={[styles.shippingIcon, { backgroundColor: isDark ? '#444' : '#e0e0e0' }]}>
-              <Text style={[styles.shippingText, { color: isDark ? '#fff' : '#000' }]}>📦</Text>
-            </View>
-            <View style={styles.productInfo}>
-              <Text style={[styles.productName, { color: isDark ? '#fff' : '#000' }]}>
-                Costo de envío
-              </Text>
-              <Text style={[styles.productDetails, { color: isDark ? '#ccc' : '#666' }]}>
-                Envío estándar
-              </Text>
-            </View>
-            <Text style={[styles.productTotal, { color: isDark ? '#fff' : '#000' }]}>
-              $50.00 MXN
-            </Text>
           </View>
-        </View>
 
-        {/* Total */}
-        <View style={[styles.section, { backgroundColor: isDark ? '#222' : '#f5f5f5' }]}>
-          <View style={styles.totalRow}>
-            <Text style={[styles.totalLabel, { color: isDark ? '#fff' : '#000' }]}>
-              Total del Pedido:
-            </Text>
-            <Text style={[styles.totalAmount, { color: '#4CAF50' }]}>
-              ${order.total.toFixed(2)} MXN
-            </Text>
+          {/* Total */}
+          <View style={[styles.section, { backgroundColor: isDark ? '#222' : '#f5f5f5' }]}>
+            <View style={styles.totalRow}>
+              <Text style={[styles.totalLabel, { color: isDark ? '#fff' : '#000' }]}>
+                Total del Pedido:
+              </Text>
+              <Text style={[styles.totalAmount, { color: '#4CAF50' }]}>
+                ${order.total.toFixed(2)} MXN
+              </Text>
+            </View>
           </View>
-        </View>
 
-        {/* Acciones */}
-        {order.status === 'PENDING' && (
-          <View style={styles.actionsContainer}>
-            {/* Verificar estado actual */}
-            <TouchableOpacity
-              style={[styles.actionButton, { backgroundColor: '#009ee3' }]}
-              onPress={handleCheckPayment}
-              disabled={checking}
-            >
-              <Text style={styles.actionButtonText}>
-                {checking ? 'Verificando...' : ' Verificar Estado del Pago'}
-              </Text>
-            </TouchableOpacity>
+          {/* Acciones */}
+          {order.status === 'PENDING' && (
+            <View style={styles.actionsContainer}>
+              {/* Verificar estado actual */}
+              <TouchableOpacity
+                style={[styles.actionButton, { backgroundColor: '#009ee3' }]}
+                onPress={handleCheckPayment}
+                disabled={checking}
+              >
+                <Text style={styles.actionButtonText}>
+                  {checking ? 'Verificando...' : ' Verificar Estado del Pago'}
+                </Text>
+              </TouchableOpacity>
 
-            {/* 💳 MÉTODOS DE PAGO REDISEÑADOS - MINIMALISTAS Y ELEGANTES */}
-            <View style={[styles.paymentSection, { backgroundColor: isDark ? '#1a1a1a' : '#f8f9fa' }]}>
-              <Text style={[styles.paymentSectionTitle, { color: isDark ? '#fff' : '#000' }]}>
-                Completa tu pago
-              </Text>
-              <Text style={[styles.paymentSectionSubtitle, { color: isDark ? '#ccc' : '#666' }]}>
-                Selecciona tu método preferido
-              </Text>
+              {/* 💳 MÉTODOS DE PAGO REDISEÑADOS - MINIMALISTAS Y ELEGANTES */}
+              <View
+                style={[styles.paymentSection, { backgroundColor: isDark ? '#1a1a1a' : '#f8f9fa' }]}
+              >
+                <Text style={[styles.paymentSectionTitle, { color: isDark ? '#fff' : '#000' }]}>
+                  Completa tu pago
+                </Text>
+                <Text style={[styles.paymentSectionSubtitle, { color: isDark ? '#ccc' : '#666' }]}>
+                  Selecciona tu método preferido
+                </Text>
 
-              {/* Lista minimalista de métodos de pago */}
-              <View style={styles.paymentList}>
-                
-                {/* Tarjetas de Crédito/Débito - Opción principal */}
-                <TouchableOpacity
-                  style={[styles.paymentOption, styles.paymentOptionPrimary, { 
-                    backgroundColor: isDark ? '#0d2818' : '#f0fff4',
-                    borderColor: '#52c41a'
-                  }]}
-                  onPress={() => handlePaymentMethod('card')}
-                  activeOpacity={0.8}
-                >
-                  <View style={styles.paymentOptionLeft}>
-                    <View style={[styles.paymentIcon, styles.paymentIconLarge, { backgroundColor: '#52c41a' }]}>
-                      <MaterialIcons name="credit-card" size={28} color="#fff" />
-                    </View>
-                    <View style={styles.paymentInfo}>
-                      <Text style={[styles.paymentName, { color: isDark ? '#fff' : '#135200' }]}>
-                        Tarjeta de Crédito/Débito
-                      </Text>
-                      <Text style={[styles.paymentDescription, { color: isDark ? '#95de64' : '#389e0d' }]}>
-                        Pago directo y seguro
-                      </Text>
-                      {/* Logos de tarjetas aceptadas */}
-                      <View style={styles.cardLogosContainer}>
-                        <Image 
-                          source={require('../../assets/images/payment-icons/visa.png')} 
-                          style={styles.cardLogo}
-                        />
-                        <Image 
-                          source={require('../../assets/images/payment-icons/mastercard.png')} 
-                          style={styles.cardLogo}
-                        />
-                        <Image 
-                          source={require('../../assets/images/payment-icons/amex.png')} 
-                          style={styles.cardLogo}
-                        />
+                {/* Lista minimalista de métodos de pago */}
+                <View style={styles.paymentList}>
+                  {/* Tarjetas de Crédito/Débito - Opción principal */}
+                  <TouchableOpacity
+                    style={[
+                      styles.paymentOption,
+                      styles.paymentOptionPrimary,
+                      {
+                        backgroundColor: isDark ? '#0d2818' : '#f0fff4',
+                        borderColor: '#52c41a',
+                      },
+                    ]}
+                    onPress={() => handlePaymentMethod('card')}
+                    activeOpacity={0.8}
+                  >
+                    <View style={styles.paymentOptionLeft}>
+                      <View
+                        style={[
+                          styles.paymentIcon,
+                          styles.paymentIconLarge,
+                          { backgroundColor: '#52c41a' },
+                        ]}
+                      >
+                        <MaterialIcons name="credit-card" size={28} color="#fff" />
+                      </View>
+                      <View style={styles.paymentInfo}>
+                        <Text style={[styles.paymentName, { color: isDark ? '#fff' : '#135200' }]}>
+                          Tarjeta de Crédito/Débito
+                        </Text>
+                        <Text
+                          style={[
+                            styles.paymentDescription,
+                            { color: isDark ? '#95de64' : '#389e0d' },
+                          ]}
+                        >
+                          Pago directo y seguro
+                        </Text>
+                        {/* Logos de tarjetas aceptadas */}
+                        <View style={styles.cardLogosContainer}>
+                          <Image
+                            source={require('../../assets/images/payment-icons/visa.png')}
+                            style={styles.cardLogo}
+                          />
+                          <Image
+                            source={require('../../assets/images/payment-icons/mastercard.png')}
+                            style={styles.cardLogo}
+                          />
+                          <Image
+                            source={require('../../assets/images/payment-icons/amex.png')}
+                            style={styles.cardLogo}
+                          />
+                        </View>
                       </View>
                     </View>
-                  </View>
-                  <View style={[styles.paymentBadge, { backgroundColor: '#52c41a' }]}>
-                    <Text style={styles.paymentBadgeText}>Más popular</Text>
-                  </View>
-                </TouchableOpacity>
+                    <View style={[styles.paymentBadge, { backgroundColor: '#52c41a' }]}>
+                      <Text style={styles.paymentBadgeText}>Más popular</Text>
+                    </View>
+                  </TouchableOpacity>
 
-                {/* MercadoPago */}
-                <TouchableOpacity
-                  style={[styles.paymentOption, { 
-                    backgroundColor: isDark ? '#003d5c' : '#e6f7ff',
-                    borderColor: '#1890ff'
-                  }]}
-                  onPress={() => handlePaymentMethod('mercadopago')}
-                  activeOpacity={0.8}
-                >
-                  <View style={styles.paymentOptionLeft}>
-                    <View style={[styles.paymentIcon, { backgroundColor: '#1890ff' }]}>
-                      <Image 
-                        source={require('../../assets/images/payment-icons/mercadopago.png')} 
-                        style={styles.paymentIconImage}
-                      />
+                  {/* MercadoPago */}
+                  <TouchableOpacity
+                    style={[
+                      styles.paymentOption,
+                      {
+                        backgroundColor: isDark ? '#003d5c' : '#e6f7ff',
+                        borderColor: '#1890ff',
+                      },
+                    ]}
+                    onPress={() => handlePaymentMethod('mercadopago')}
+                    activeOpacity={0.8}
+                  >
+                    <View style={styles.paymentOptionLeft}>
+                      <View style={[styles.paymentIcon, { backgroundColor: '#1890ff' }]}>
+                        <Image
+                          source={require('../../assets/images/payment-icons/mercadopago.png')}
+                          style={styles.paymentIconImage}
+                        />
+                      </View>
+                      <View style={styles.paymentInfo}>
+                        <Text style={[styles.paymentName, { color: isDark ? '#fff' : '#001d66' }]}>
+                          MercadoPago
+                        </Text>
+                        <Text
+                          style={[
+                            styles.paymentDescription,
+                            { color: isDark ? '#91d5ff' : '#0050b3' },
+                          ]}
+                        >
+                          Todas las opciones de pago
+                        </Text>
+                      </View>
                     </View>
-                    <View style={styles.paymentInfo}>
-                      <Text style={[styles.paymentName, { color: isDark ? '#fff' : '#001d66' }]}>
-                        MercadoPago
-                      </Text>
-                      <Text style={[styles.paymentDescription, { color: isDark ? '#91d5ff' : '#0050b3' }]}>
-                        Todas las opciones de pago
-                      </Text>
-                    </View>
-                  </View>
-                  <Text style={[styles.paymentArrow, { color: isDark ? '#1890ff' : '#0050b3' }]}>→</Text>
-                </TouchableOpacity>
+                    <Text style={[styles.paymentArrow, { color: isDark ? '#1890ff' : '#0050b3' }]}>
+                      →
+                    </Text>
+                  </TouchableOpacity>
 
-                {/* Transferencia Bancaria */}
-                <TouchableOpacity
-                  style={[styles.paymentOption, { 
-                    backgroundColor: isDark ? '#162312' : '#f6ffed',
-                    borderColor: isDark ? '#274916' : '#b7eb8f'
-                  }]}
-                  onPress={() => handlePaymentMethod('transfer')}
-                  activeOpacity={0.8}
-                >
-                  <View style={styles.paymentOptionLeft}>
-                    <View style={[styles.paymentIcon, { backgroundColor: '#52c41a' }]}>
-                      <MaterialIcons name="account-balance" size={24} color="#fff" />
+                  {/* Transferencia Bancaria */}
+                  <TouchableOpacity
+                    style={[
+                      styles.paymentOption,
+                      {
+                        backgroundColor: isDark ? '#162312' : '#f6ffed',
+                        borderColor: isDark ? '#274916' : '#b7eb8f',
+                      },
+                    ]}
+                    onPress={() => handlePaymentMethod('transfer')}
+                    activeOpacity={0.8}
+                  >
+                    <View style={styles.paymentOptionLeft}>
+                      <View style={[styles.paymentIcon, { backgroundColor: '#52c41a' }]}>
+                        <MaterialIcons name="account-balance" size={24} color="#fff" />
+                      </View>
+                      <View style={styles.paymentInfo}>
+                        <Text style={[styles.paymentName, { color: isDark ? '#fff' : '#135200' }]}>
+                          Transferencia SPEI
+                        </Text>
+                        <Text
+                          style={[
+                            styles.paymentDescription,
+                            { color: isDark ? '#95de64' : '#389e0d' },
+                          ]}
+                        >
+                          Sin comisiones • Confirmación inmediata
+                        </Text>
+                      </View>
                     </View>
-                    <View style={styles.paymentInfo}>
-                      <Text style={[styles.paymentName, { color: isDark ? '#fff' : '#135200' }]}>
-                        Transferencia SPEI
-                      </Text>
-                      <Text style={[styles.paymentDescription, { color: isDark ? '#95de64' : '#389e0d' }]}>
-                        Sin comisiones • Confirmación inmediata
-                      </Text>
-                    </View>
-                  </View>
-                  <Text style={[styles.paymentArrow, { color: isDark ? '#52c41a' : '#389e0d' }]}>→</Text>
-                </TouchableOpacity>
+                    <Text style={[styles.paymentArrow, { color: isDark ? '#52c41a' : '#389e0d' }]}>
+                      →
+                    </Text>
+                  </TouchableOpacity>
 
-                {/* OXXO */}
-                <TouchableOpacity
-                  style={[styles.paymentOption, { 
-                    backgroundColor: isDark ? '#2a1215' : '#fff0f6',
-                    borderColor: isDark ? '#531dab' : '#efdbff'
-                  }]}
-                  onPress={() => handlePaymentMethod('oxxo')}
-                  activeOpacity={0.8}
-                >
-                  <View style={styles.paymentOptionLeft}>
-                    <View style={[styles.paymentIcon, { backgroundColor: '#eb2f96' }]}>
-                      <Image 
-                        source={require('../../assets/images/payment-icons/oxxo.png')} 
-                        style={styles.paymentIconImage}
-                      />
+                  {/* OXXO */}
+                  <TouchableOpacity
+                    style={[
+                      styles.paymentOption,
+                      {
+                        backgroundColor: isDark ? '#2a1215' : '#fff0f6',
+                        borderColor: isDark ? '#531dab' : '#efdbff',
+                      },
+                    ]}
+                    onPress={() => handlePaymentMethod('oxxo')}
+                    activeOpacity={0.8}
+                  >
+                    <View style={styles.paymentOptionLeft}>
+                      <View style={[styles.paymentIcon, { backgroundColor: '#eb2f96' }]}>
+                        <Image
+                          source={require('../../assets/images/payment-icons/oxxo.png')}
+                          style={styles.paymentIconImage}
+                        />
+                      </View>
+                      <View style={styles.paymentInfo}>
+                        <Text style={[styles.paymentName, { color: isDark ? '#fff' : '#780650' }]}>
+                          OXXO
+                        </Text>
+                        <Text
+                          style={[
+                            styles.paymentDescription,
+                            { color: isDark ? '#ffadd6' : '#c41d7f' },
+                          ]}
+                        >
+                          Efectivo • +20,000 tiendas
+                        </Text>
+                      </View>
                     </View>
-                    <View style={styles.paymentInfo}>
-                      <Text style={[styles.paymentName, { color: isDark ? '#fff' : '#780650' }]}>
-                        OXXO
-                      </Text>
-                      <Text style={[styles.paymentDescription, { color: isDark ? '#ffadd6' : '#c41d7f' }]}>
-                        Efectivo • +20,000 tiendas
-                      </Text>
-                    </View>
-                  </View>
-                  <Text style={[styles.paymentArrow, { color: isDark ? '#eb2f96' : '#c41d7f' }]}>→</Text>
-                </TouchableOpacity>
+                    <Text style={[styles.paymentArrow, { color: isDark ? '#eb2f96' : '#c41d7f' }]}>
+                      →
+                    </Text>
+                  </TouchableOpacity>
 
-                {/* PayPal */}
-                <TouchableOpacity
-                  style={[styles.paymentOption, { 
-                    backgroundColor: isDark ? '#111a2c' : '#f0f5ff',
-                    borderColor: isDark ? '#1d39c4' : '#adc6ff'
-                  }]}
-                  onPress={() => handlePaymentMethod('paypal')}
-                  activeOpacity={0.8}
-                >
-                  <View style={styles.paymentOptionLeft}>
-                    <View style={[styles.paymentIcon, { backgroundColor: '#2f54eb' }]}>
-                      <Image 
-                        source={require('../../assets/images/payment-icons/paypal.png')} 
-                        style={styles.paymentIconImage}
-                      />
+                  {/* PayPal */}
+                  <TouchableOpacity
+                    style={[
+                      styles.paymentOption,
+                      {
+                        backgroundColor: isDark ? '#111a2c' : '#f0f5ff',
+                        borderColor: isDark ? '#1d39c4' : '#adc6ff',
+                      },
+                    ]}
+                    onPress={() => handlePaymentMethod('paypal')}
+                    activeOpacity={0.8}
+                  >
+                    <View style={styles.paymentOptionLeft}>
+                      <View style={[styles.paymentIcon, { backgroundColor: '#2f54eb' }]}>
+                        <Image
+                          source={require('../../assets/images/payment-icons/paypal.png')}
+                          style={styles.paymentIconImage}
+                        />
+                      </View>
+                      <View style={styles.paymentInfo}>
+                        <Text style={[styles.paymentName, { color: isDark ? '#fff' : '#10239e' }]}>
+                          PayPal
+                        </Text>
+                        <Text
+                          style={[
+                            styles.paymentDescription,
+                            { color: isDark ? '#85a5ff' : '#2f54eb' },
+                          ]}
+                        >
+                          Internacional • Protección del comprador
+                        </Text>
+                      </View>
                     </View>
-                    <View style={styles.paymentInfo}>
-                      <Text style={[styles.paymentName, { color: isDark ? '#fff' : '#10239e' }]}>
-                        PayPal
-                      </Text>
-                      <Text style={[styles.paymentDescription, { color: isDark ? '#85a5ff' : '#2f54eb' }]}>
-                        Internacional • Protección del comprador
-                      </Text>
-                    </View>
-                  </View>
-                  <Text style={[styles.paymentArrow, { color: isDark ? '#2f54eb' : '#2f54eb' }]}>→</Text>
-                </TouchableOpacity>
+                    <Text style={[styles.paymentArrow, { color: isDark ? '#2f54eb' : '#2f54eb' }]}>
+                      →
+                    </Text>
+                  </TouchableOpacity>
 
-                {/* Criptomonedas */}
-                <TouchableOpacity
-                  style={[styles.paymentOption, { 
-                    backgroundColor: isDark ? '#2b1d11' : '#fffbe6',
-                    borderColor: isDark ? '#613400' : '#ffe58f'
-                  }]}
-                  onPress={() => handlePaymentMethod('crypto')}
-                  activeOpacity={0.8}
-                >
-                  <View style={styles.paymentOptionLeft}>
-                    <View style={[styles.paymentIcon, { backgroundColor: '#fa8c16' }]}>
-                      <Image 
-                        source={require('../../assets/images/payment-icons/bitcoin.png')} 
-                        style={styles.paymentIconImage}
-                      />
+                  {/* Criptomonedas */}
+                  <TouchableOpacity
+                    style={[
+                      styles.paymentOption,
+                      {
+                        backgroundColor: isDark ? '#2b1d11' : '#fffbe6',
+                        borderColor: isDark ? '#613400' : '#ffe58f',
+                      },
+                    ]}
+                    onPress={() => handlePaymentMethod('crypto')}
+                    activeOpacity={0.8}
+                  >
+                    <View style={styles.paymentOptionLeft}>
+                      <View style={[styles.paymentIcon, { backgroundColor: '#fa8c16' }]}>
+                        <Image
+                          source={require('../../assets/images/payment-icons/bitcoin.png')}
+                          style={styles.paymentIconImage}
+                        />
+                      </View>
+                      <View style={styles.paymentInfo}>
+                        <Text style={[styles.paymentName, { color: isDark ? '#fff' : '#874d00' }]}>
+                          Criptomonedas
+                        </Text>
+                        <Text
+                          style={[
+                            styles.paymentDescription,
+                            { color: isDark ? '#ffd666' : '#d46b08' },
+                          ]}
+                        >
+                          Bitcoin, USDT, Ethereum
+                        </Text>
+                      </View>
                     </View>
-                    <View style={styles.paymentInfo}>
-                      <Text style={[styles.paymentName, { color: isDark ? '#fff' : '#874d00' }]}>
-                        Criptomonedas
-                      </Text>
-                      <Text style={[styles.paymentDescription, { color: isDark ? '#ffd666' : '#d46b08' }]}>
-                        Bitcoin, USDT, Ethereum
-                      </Text>
-                    </View>
-                  </View>
-                  <Text style={[styles.paymentArrow, { color: isDark ? '#fa8c16' : '#d46b08' }]}>→</Text>
-                </TouchableOpacity>
+                    <Text style={[styles.paymentArrow, { color: isDark ? '#fa8c16' : '#d46b08' }]}>
+                      →
+                    </Text>
+                  </TouchableOpacity>
+                </View>
 
+                {/* Footer de seguridad */}
+                <View style={styles.securityFooter}>
+                  <Text style={styles.securityIcon}></Text>
+                  <Text
+                    style={[styles.securityFooterText, { color: isDark ? '#8c8c8c' : '#595959' }]}
+                  >
+                    Pagos protegidos con SSL 256-bit
+                  </Text>
+                </View>
               </View>
 
-              {/* Footer de seguridad */}
-              <View style={styles.securityFooter}>
-                <Text style={styles.securityIcon}></Text>
-                <Text style={[styles.securityFooterText, { color: isDark ? '#8c8c8c' : '#595959' }]}>
-                  Pagos protegidos con SSL 256-bit
-                </Text>
-              </View>
+              {/* Cancelar pedido */}
+              <TouchableOpacity
+                style={[styles.cancelOrderButton, { borderColor: '#ff4d4f' }]}
+                onPress={() => handleCancelOrder()}
+              >
+                <Text style={[styles.cancelOrderText, { color: '#ff4d4f' }]}>Cancelar pedido</Text>
+              </TouchableOpacity>
             </View>
-            
-            {/* Cancelar pedido */}
-            <TouchableOpacity
-              style={[styles.cancelOrderButton, { borderColor: '#ff4d4f' }]}
-              onPress={() => handleCancelOrder()}
-            >
-              <Text style={[styles.cancelOrderText, { color: '#ff4d4f' }]}>
-                Cancelar pedido
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </ScrollView>
-    </View>
+          )}
+        </ScrollView>
+      </View>
     </>
   );
 }
@@ -932,7 +1037,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  
+
   // 💳 ESTILOS PARA MÉTODOS DE PAGO PROFESIONALES Y MODERNOS
   paymentMethodsTitle: {
     fontSize: 20,
@@ -947,13 +1052,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     opacity: 0.8,
   },
-  
+
   // Grid moderno para métodos de pago
   paymentGrid: {
     gap: 16,
     marginBottom: 24,
   },
-  
+
   // Card elegante para cada método de pago
   paymentCard: {
     borderRadius: 16,
@@ -968,7 +1073,7 @@ const styles = StyleSheet.create({
     position: 'relative',
     overflow: 'hidden',
   },
-  
+
   // Icono circular del método de pago
   paymentCardIcon: {
     width: 56,
@@ -983,28 +1088,28 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
-  
+
   // Imagen dentro del icono
   paymentCardImage: {
     width: 32,
     height: 32,
     resizeMode: 'contain',
   },
-  
+
   // Título del método de pago
   paymentCardTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     marginBottom: 8,
   },
-  
+
   // Descripción del método
   paymentCardDesc: {
     fontSize: 14,
     marginBottom: 16,
     lineHeight: 20,
   },
-  
+
   // Badge con beneficio
   paymentCardBadge: {
     paddingHorizontal: 12,
@@ -1012,13 +1117,13 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignSelf: 'flex-start',
   },
-  
+
   paymentCardBadgeText: {
     color: '#fff',
     fontSize: 12,
     fontWeight: 'bold',
   },
-  
+
   // Sección de seguridad
   securitySection: {
     flexDirection: 'row',
@@ -1028,14 +1133,14 @@ const styles = StyleSheet.create({
     marginTop: 16,
     marginBottom: 24,
   },
-  
+
   securityText: {
     fontSize: 14,
     marginLeft: 12,
     flex: 1,
     lineHeight: 20,
   },
-  
+
   // Botón de cancelar rediseñado
   cancelButton: {
     flexDirection: 'row',
@@ -1053,7 +1158,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginLeft: 8,
   },
-  
+
   // ✨ ESTILOS PARA MÉTODOS DE PAGO MINIMALISTAS Y PROFESIONALES
   paymentSection: {
     padding: 20,
@@ -1076,7 +1181,7 @@ const styles = StyleSheet.create({
   paymentList: {
     gap: 12,
   },
-  
+
   // Estilo para cada opción de pago
   paymentOption: {
     flexDirection: 'row',
@@ -1102,7 +1207,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
   },
-  
+
   // Icono circular
   paymentIcon: {
     width: 44,
@@ -1123,21 +1228,21 @@ const styles = StyleSheet.create({
     height: 50,
     borderRadius: 25,
   },
-  
+
   // Imágenes dentro de los iconos
   paymentIconImage: {
     width: 24,
     height: 24,
     resizeMode: 'contain',
   },
-  
+
   // Imagen más grande para MercadoPago
   paymentIconImageLarge: {
     width: 30,
     height: 30,
     resizeMode: 'contain',
   },
-  
+
   // Información del método
   paymentInfo: {
     flex: 1,
@@ -1152,7 +1257,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 18,
   },
-  
+
   // 💳 Contenedor y estilos para logos de tarjetas
   cardLogosContainer: {
     flexDirection: 'row',
@@ -1172,7 +1277,7 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 2,
   },
-  
+
   // Badge y flecha
   paymentBadge: {
     backgroundColor: '#1890ff',
@@ -1190,7 +1295,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginRight: 4,
   },
-  
+
   // Footer de seguridad
   securityFooter: {
     flexDirection: 'row',
@@ -1209,7 +1314,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
   },
-  
+
   // Botón de cancelar pedido
   cancelOrderButton: {
     flexDirection: 'row',

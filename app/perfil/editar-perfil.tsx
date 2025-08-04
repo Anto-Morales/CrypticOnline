@@ -2,19 +2,60 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Stack, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    useColorScheme,
-    View,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useColorScheme,
+  View,
 } from 'react-native';
-import { apiRequest } from '../config/api';
+
+// Función API helper - igual que en perfil principal
+export const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
+  // 🔧 CONFIGURACIÓN AUTOMÁTICA DE URL
+  let baseUrl =
+    process.env.EXPO_PUBLIC_NGROK_URL || process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+
+  // 🚨 FALLBACK URL SI LAS VARIABLES NO FUNCIONAN
+  const FALLBACK_NGROK_URL = 'https://cd793b0aaa37.ngrok-free.app';
+
+  // 🌐 DETECCIÓN AUTOMÁTICA DE ENTORNO
+  if (!process.env.EXPO_PUBLIC_NGROK_URL && !process.env.EXPO_PUBLIC_API_URL) {
+    console.log('⚠️ Variables de entorno no disponibles en editar perfil, usando fallback');
+    baseUrl = FALLBACK_NGROK_URL;
+  }
+
+  console.log('🔗 URL Base detectada en editar perfil:', baseUrl);
+
+  try {
+    const fullUrl = `${baseUrl}${endpoint}`;
+    console.log('✏️ API Request desde editar perfil a:', fullUrl);
+
+    const response = await fetch(fullUrl, {
+      headers: {
+        'Content-Type': 'application/json',
+        // 🔒 HEADERS PARA NGROK
+        'ngrok-skip-browser-warning': 'true',
+        'User-Agent': 'CrypticOnline-Mobile-App',
+        ...options.headers,
+      },
+      ...options,
+    });
+
+    const data = await response.json();
+    console.log('📡 Response desde editar perfil:', { status: response.status, ok: response.ok });
+
+    return { response, data };
+  } catch (error) {
+    console.error('❌ API Request Error desde editar perfil:', error);
+    throw error;
+  }
+};
 
 interface UserProfile {
   nombres: string;
@@ -35,7 +76,7 @@ export default function EditarPerfilScreen() {
   const router = useRouter();
   const scheme = useColorScheme();
   const isDark = scheme === 'dark';
-  
+
   const [user, setUser] = useState<UserProfile>({
     nombres: '',
     apellidoPaterno: '',
@@ -48,12 +89,12 @@ export default function EditarPerfilScreen() {
     ciudad: '',
     estado: '',
     codigoPostal: '',
-    referencias: ''
+    referencias: '',
   });
-  
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [errors, setErrors] = useState<{[key: string]: string}>({});
+  const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
   const themeColors = {
     background: isDark ? '#000' : '#fff',
@@ -81,21 +122,30 @@ export default function EditarPerfilScreen() {
         return;
       }
 
-      const { response, data } = await apiRequest('/api/user/profile', {
+      console.log('📡 Fetching user profile...');
+      const { response, data } = await apiRequest('/api/auth/profile', {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
         },
       });
 
-      if (response.ok) {
+      console.log('📡 Response status:', response.status);
+      console.log('📦 Response data:', data);
+
+      if (response.ok && data.user) {
+        console.log('✅ Profile data received:', data.user);
         setUser(data.user);
       } else if (response.status === 401) {
+        console.log('❌ Unauthorized, redirecting to login');
         await AsyncStorage.removeItem('token');
         router.push('/auth/login');
+      } else {
+        console.log('❌ Error response:', data);
+        Alert.alert('Error', 'No se pudo cargar el perfil');
       }
     } catch (error) {
-      console.error('Error fetching profile:', error);
+      console.error('❌ Error fetching profile:', error);
       Alert.alert('Error', 'No se pudo cargar el perfil');
     } finally {
       setLoading(false);
@@ -103,11 +153,13 @@ export default function EditarPerfilScreen() {
   };
 
   const validateForm = () => {
-    const newErrors: {[key: string]: string} = {};
+    const newErrors: { [key: string]: string } = {};
 
     if (!user.nombres.trim()) newErrors.nombres = 'El nombre es requerido';
-    if (!user.apellidoPaterno.trim()) newErrors.apellidoPaterno = 'El apellido paterno es requerido';
-    if (!user.apellidoMaterno.trim()) newErrors.apellidoMaterno = 'El apellido materno es requerido';
+    if (!user.apellidoPaterno.trim())
+      newErrors.apellidoPaterno = 'El apellido paterno es requerido';
+    if (!user.apellidoMaterno.trim())
+      newErrors.apellidoMaterno = 'El apellido materno es requerido';
     if (!user.email.trim()) newErrors.email = 'El email es requerido';
     if (!user.telefono.trim()) newErrors.telefono = 'El teléfono es requerido';
     if (!user.calle.trim()) newErrors.calle = 'La calle es requerida';
@@ -133,7 +185,7 @@ export default function EditarPerfilScreen() {
 
   const handleSave = async () => {
     if (!validateForm() || saving) return;
-    
+
     setSaving(true);
 
     try {
@@ -143,30 +195,42 @@ export default function EditarPerfilScreen() {
         return;
       }
 
-      const { response, data } = await apiRequest('/api/user/profile', {
+      console.log('💾 Saving profile data:', user);
+      const { response, data } = await apiRequest('/api/auth/profile', {
         method: 'PUT',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(user),
       });
 
+      console.log('📡 Save response status:', response.status);
+      console.log('📦 Save response data:', data);
+
       if (response.ok) {
-        Alert.alert(
-          'Éxito',
-          'Perfil actualizado correctamente',
-          [
-            {
-              text: 'Aceptar',
-              onPress: () => router.back()
-            }
-          ]
-        );
+        // Actualizar datos en AsyncStorage
+        const userData = await AsyncStorage.getItem('userData');
+        if (userData) {
+          const parsedData = JSON.parse(userData);
+          const updatedData = {
+            ...parsedData,
+            ...user,
+            name: `${user.nombres} ${user.apellidoPaterno}`.trim(),
+          };
+          await AsyncStorage.setItem('userData', JSON.stringify(updatedData));
+        }
+
+        Alert.alert('Éxito', 'Perfil actualizado correctamente', [
+          {
+            text: 'Aceptar',
+            onPress: () => router.back(),
+          },
+        ]);
       } else {
         Alert.alert('Error', data.error || 'No se pudo actualizar el perfil');
       }
     } catch (error) {
-      console.error('Error updating profile:', error);
+      console.error('❌ Error updating profile:', error);
       Alert.alert('Error', 'No se pudo conectar con el servidor');
     } finally {
       setSaving(false);
@@ -174,9 +238,9 @@ export default function EditarPerfilScreen() {
   };
 
   const updateField = (field: keyof UserProfile, value: string) => {
-    setUser(prev => ({ ...prev, [field]: value }));
+    setUser((prev) => ({ ...prev, [field]: value }));
     if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: '' }));
+      setErrors((prev) => ({ ...prev, [field]: '' }));
     }
   };
 
@@ -210,9 +274,7 @@ export default function EditarPerfilScreen() {
         editable={!saving}
       />
       {errors[field] && (
-        <Text style={[styles.errorText, { color: themeColors.error }]}>
-          {errors[field]}
-        </Text>
+        <Text style={[styles.errorText, { color: themeColors.error }]}>{errors[field]}</Text>
       )}
     </View>
   );
@@ -220,11 +282,11 @@ export default function EditarPerfilScreen() {
   if (loading) {
     return (
       <>
-        <Stack.Screen 
-          options={{ 
+        <Stack.Screen
+          options={{
             title: 'Editar Perfil',
-            headerShown: true 
-          }} 
+            headerShown: true,
+          }}
         />
         <View style={[styles.container, { backgroundColor: themeColors.background }]}>
           <View style={styles.loadingContainer}>
@@ -240,85 +302,86 @@ export default function EditarPerfilScreen() {
 
   return (
     <>
-      <Stack.Screen 
-        options={{ 
+      <Stack.Screen
+        options={{
           title: 'Editar Perfil',
-          headerShown: true 
-        }} 
+          headerShown: true,
+        }}
       />
       <KeyboardAvoidingView
         style={[styles.container, { backgroundColor: themeColors.background }]}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <ScrollView 
+        <ScrollView
           style={styles.scrollView}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollViewContent}
         >
-        <View style={styles.formContainer}>
-          <View style={styles.form}>
-          {/* Información Personal */}
-          <View style={[styles.section, { backgroundColor: themeColors.cardBackground }]}>
-            <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
-              Información Personal
-            </Text>
-            
-            {renderInput('Nombres', 'nombres', 'Ingresa tus nombres')}
-            {renderInput('Apellido Paterno', 'apellidoPaterno', 'Ingresa tu apellido paterno')}
-            {renderInput('Apellido Materno', 'apellidoMaterno', 'Ingresa tu apellido materno')}
-            {renderInput('Email', 'email', 'tu@email.com', false, 'email-address')}
-            {renderInput('Teléfono', 'telefono', '+52 555 123 4567', false, 'phone-pad')}
-          </View>
+          <View style={styles.formContainer}>
+            <View style={styles.form}>
+              {/* Información Personal */}
+              <View style={[styles.section, { backgroundColor: themeColors.cardBackground }]}>
+                <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
+                  Información Personal
+                </Text>
 
-          {/* Dirección */}
-          <View style={[styles.section, { backgroundColor: themeColors.cardBackground }]}>
-            <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
-              Dirección
-            </Text>
-            
-            {renderInput('Calle', 'calle', 'Nombre de la calle')}
-            {renderInput('Número', 'numero', 'Número exterior')}
-            {renderInput('Colonia', 'colonia', 'Nombre de la colonia')}
-            {renderInput('Ciudad', 'ciudad', 'Nombre de la ciudad')}
-            {renderInput('Estado', 'estado', 'Nombre del estado')}
-            {renderInput('Código Postal', 'codigoPostal', '12345')}
-            {renderInput('Referencias', 'referencias', 'Referencias adicionales (opcional)', true)}
-          </View>
+                {renderInput('Nombres', 'nombres', 'Ingresa tus nombres')}
+                {renderInput('Apellido Paterno', 'apellidoPaterno', 'Ingresa tu apellido paterno')}
+                {renderInput('Apellido Materno', 'apellidoMaterno', 'Ingresa tu apellido materno')}
+                {renderInput('Email', 'email', 'tu@email.com', false, 'email-address')}
+                {renderInput('Teléfono', 'telefono', '+52 555 123 4567', false, 'phone-pad')}
+              </View>
 
-          {/* Botones */}
-          <View style={styles.buttonContainer}>
-            <TouchableOpacity
-              style={[
-                styles.button,
-                styles.saveButton,
-                { backgroundColor: themeColors.primary }
-              ]}
-              onPress={handleSave}
-              disabled={saving}
-            >
-              <Text style={[styles.buttonText, { color: '#fff' }]}>
-                {saving ? 'Guardando...' : 'Guardar Cambios'}
-              </Text>
-            </TouchableOpacity>
+              {/* Dirección */}
+              <View style={[styles.section, { backgroundColor: themeColors.cardBackground }]}>
+                <Text style={[styles.sectionTitle, { color: themeColors.text }]}>Dirección</Text>
 
-            <TouchableOpacity
-              style={[
-                styles.button,
-                styles.cancelButton,
-                { borderColor: themeColors.inputBorder }
-              ]}
-              onPress={() => router.back()}
-              disabled={saving}
-            >
-              <Text style={[styles.buttonText, { color: themeColors.text }]}>
-                Cancelar
-              </Text>
-            </TouchableOpacity>
+                {renderInput('Calle', 'calle', 'Nombre de la calle')}
+                {renderInput('Número', 'numero', 'Número exterior')}
+                {renderInput('Colonia', 'colonia', 'Nombre de la colonia')}
+                {renderInput('Ciudad', 'ciudad', 'Nombre de la ciudad')}
+                {renderInput('Estado', 'estado', 'Nombre del estado')}
+                {renderInput('Código Postal', 'codigoPostal', '12345')}
+                {renderInput(
+                  'Referencias',
+                  'referencias',
+                  'Referencias adicionales (opcional)',
+                  true
+                )}
+              </View>
+
+              {/* Botones */}
+              <View style={styles.buttonContainer}>
+                <TouchableOpacity
+                  style={[
+                    styles.button,
+                    styles.saveButton,
+                    { backgroundColor: themeColors.primary },
+                  ]}
+                  onPress={handleSave}
+                  disabled={saving}
+                >
+                  <Text style={[styles.buttonText, { color: '#fff' }]}>
+                    {saving ? 'Guardando...' : 'Guardar Cambios'}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.button,
+                    styles.cancelButton,
+                    { borderColor: themeColors.inputBorder },
+                  ]}
+                  onPress={() => router.back()}
+                  disabled={saving}
+                >
+                  <Text style={[styles.buttonText, { color: themeColors.text }]}>Cancelar</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
-          </View>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </>
   );
 }
