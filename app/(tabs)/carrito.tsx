@@ -1,110 +1,218 @@
+import { useRouter } from 'expo-router';
 import React from 'react';
 import {
-  View,
-  Text,
+  Dimensions,
   Image,
-  TouchableOpacity,
-  StyleSheet,
   ScrollView,
-  TextInput
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  useColorScheme,
+  View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
-
-interface CartItem {
-  id: number;
-  name: string;
-  size: string;
-  status: string;
-  price: number;
-  image: any;
-}
+import { useCarrito } from '../context/CarritoContext';
 
 const CartScreen: React.FC = () => {
   const router = useRouter();
-  
-  const cartItems: CartItem[] = [
-    {
-      id: 1,
-      name: 'PLAYERA 1',
-      size: 'TALLA MEDIANA',
-      status: 'TU PEDIDO ESTA EN PREPARACION LLEGA ENTRE EL 23 DE JULIO A 27',
-      price: 999,
-      image: require('../../assets/images/shirt1.png')
-    },
-    {
-      id: 2,
-      name: 'PLAYERA 1',
-      size: 'TALLA MEDIANA',
-      status: 'TU PEDIDO ESTA EN PREPARACION LLEGA ENTRE EL 23 DE JULIO A 27',
-      price: 999,
-      image: require('../../assets/images/shirt1.png')
-    }
-  ];
+  const screenWidth = Dimensions.get('window').width;
+  const scheme = useColorScheme();
+  const isDark = scheme === 'dark';
 
-  const shippingCost = 200;
-  const totalProducts = cartItems.length;
-  const totalProductsPrice = cartItems.reduce((sum, item) => sum + item.price, 0);
+  const carrito = useCarrito();
+
+  const shippingCost = 50;
+  const totalProducts = carrito.items.length;
+  const totalProductsPrice = carrito.items.reduce(
+    (sum, item) => sum + item.unit_price * item.quantity,
+    0
+  );
   const totalToPay = totalProductsPrice + shippingCost;
 
-  return (
-    <View style={styles.container}>
-      {/* Header with logo, search and icons */}
-      <View style={styles.header}>
-        <Image 
-          source={require('../../assets/images/Logo.png')} 
-          style={styles.companyLogo}
-        />
-        
-        <View style={styles.searchContainer}>
-          <TextInput
-            style={styles.searchBar}
-            placeholder="Buscar productos..."
-            placeholderTextColor="#999"
-          />
-        </View>
-        
-        <View style={styles.iconsContainer}>
-          <TouchableOpacity onPress={() => router.push('/notificaciones')}>
-            <Image source={require('../../assets/images/notif.png')} style={styles.icon} />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.push('/carrito')}>
-            <Image source={require('../../assets/images/carro.jpg')} style={styles.icon} />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.push('/perfil')}>
-            <Image source={require('../../assets/images/perfil.png')} style={styles.icon} />
-          </TouchableOpacity>
-        </View>
-      </View>
+  // Estilos responsivos
+  const containerBg = isDark ? '#000' : '#fff';
+  const cardBg = isDark ? '#222' : '#f5f5f5'; // color claro para tarjetas en modo claro
+  const borderColor = isDark ? '#fff' : '#000';
 
-      <ScrollView style={styles.contentContainer}>
-        {cartItems.map(item => (
-          <View key={item.id} style={styles.itemContainer}>
-            <Image source={item.image} style={styles.itemImage} resizeMode="contain" />
-            <View style={styles.itemDetails}>
-              <Text style={styles.itemName}>{item.name}</Text>
-              <Text style={styles.itemSize}>{item.size}</Text>
-              <Text style={styles.itemStatus}>{item.status}</Text>
-              <Text style={styles.itemPrice}>$ {item.price} MXN</Text>
-              <View style={styles.buttonsRow}>
-                <TouchableOpacity style={styles.secondaryButton}>
-                  <Text>ELIMINAR DEL CARRITO</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.primaryButton}>
-                  <Text style={styles.primaryButtonText}>COMPRAR</Text>
-                </TouchableOpacity>
+  const contentContainerStyle = {
+    flex: 1,
+    padding: screenWidth < 400 ? 8 : 20,
+    width: screenWidth < 500 ? '100%' : 500,
+    alignSelf: 'center',
+  };
+  const itemContainerStyle = {
+    borderWidth: 1,
+    borderColor: borderColor,
+    marginBottom: 20,
+    padding: screenWidth < 400 ? 6 : 10,
+    borderRadius: 10,
+    backgroundColor: cardBg,
+  };
+  const itemImageStyle = {
+    width: screenWidth < 400 ? 70 : 100,
+    height: screenWidth < 400 ? 70 : 100,
+    marginRight: 10,
+    borderRadius: 8,
+  };
+  const summaryContainerStyle = {
+    borderWidth: 1,
+    borderColor: borderColor,
+    padding: screenWidth < 400 ? 10 : 15,
+    marginTop: 20,
+    borderRadius: 10,
+    backgroundColor: cardBg,
+  };
+
+  const handleComprarProducto = (item: any) => {
+    router.push({ pathname: '/pago/pago', params: { productoId: item.id } });
+  };
+
+  const handleComprarCarrito = () => {
+    // Enviamos los productos del carrito como parámetro
+    router.push({
+      pathname: '/pago/pago',
+      params: {
+        cartItems: JSON.stringify(
+          carrito.items.map((item) => ({
+            title: item.title,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+          }))
+        ),
+        productoId: 'carrito',
+      },
+    });
+  };
+
+  // Elimina las tarjetas de prueba y muestra los productos reales del carrito
+  return (
+    <View style={[styles.container, { backgroundColor: containerBg }]}>
+      {/* Solo el logo centrado */}
+      <View style={{ alignItems: 'center', marginTop: 20, marginBottom: 10 }}>
+        <Image source={require('../../assets/images/Logo.png')} style={styles.companyLogo} />
+      </View>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ alignItems: 'center' }}>
+        {carrito.items.length === 0 ? (
+          <Text style={{ color: isDark ? '#fff' : '#000', marginTop: 40 }}>
+            Tu carrito está vacío
+          </Text>
+        ) : (
+          carrito.items.map((item, idx) => (
+            <View key={idx} style={[styles.itemContainer, itemContainerStyle]}>
+              <Image
+                source={
+                  item.image ? { uri: item.image } : require('../../assets/images/shirt1.png')
+                }
+                defaultSource={require('../../assets/images/shirt1.png')}
+                style={itemImageStyle}
+                resizeMode="contain"
+              />
+              <View style={styles.itemDetails}>
+                <Text style={[styles.itemName, { color: isDark ? '#fff' : '#000' }]}>
+                  {item.title}
+                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 5 }}>
+                  <Text style={[styles.itemSize, { color: isDark ? '#ccc' : '#555' }]}>
+                    Talla:{' '}
+                  </Text>
+                  {['S', 'M', 'L', 'XL'].map((t) => (
+                    <TouchableOpacity
+                      key={t}
+                      style={{
+                        marginHorizontal: 2,
+                        padding: 4,
+                        borderRadius: 6,
+                        backgroundColor: item.talla === t ? '#009ee3' : 'transparent',
+                      }}
+                      onPress={() => carrito.updateItem(item.id, { talla: t })}
+                    >
+                      <Text
+                        style={{
+                          color: item.talla === t ? '#fff' : isDark ? '#ccc' : '#555',
+                          fontWeight: item.talla === t ? 'bold' : 'normal',
+                        }}
+                      >
+                        {t}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 5 }}>
+                  <Text style={[styles.itemPrice, { color: isDark ? '#fff' : '#000' }]}>
+                    Cantidad:{' '}
+                  </Text>
+                  <TouchableOpacity
+                    style={{
+                      padding: 4,
+                      backgroundColor: '#eee',
+                      borderRadius: 6,
+                      marginHorizontal: 2,
+                    }}
+                    onPress={() =>
+                      carrito.updateItem(item.id, { quantity: Math.max(1, item.quantity - 1) })
+                    }
+                  >
+                    <Text>-</Text>
+                  </TouchableOpacity>
+                  <Text
+                    style={[
+                      styles.itemPrice,
+                      { color: isDark ? '#fff' : '#000', marginHorizontal: 6 },
+                    ]}
+                  >
+                    {item.quantity}
+                  </Text>
+                  <TouchableOpacity
+                    style={{
+                      padding: 4,
+                      backgroundColor: '#eee',
+                      borderRadius: 6,
+                      marginHorizontal: 2,
+                    }}
+                    onPress={() => carrito.updateItem(item.id, { quantity: item.quantity + 1 })}
+                  >
+                    <Text>+</Text>
+                  </TouchableOpacity>
+                </View>
+                <Text style={[styles.itemPrice, { color: isDark ? '#fff' : '#000' }]}>
+                  $ {item.unit_price} MXN
+                </Text>
+                <View style={styles.buttonsRow}>
+                  <TouchableOpacity
+                    style={[styles.secondaryButton, { borderColor }]}
+                    onPress={() => carrito.removeItem(item.id)}
+                  >
+                    <Text style={{ color: isDark ? '#fff' : '#000' }}>Eliminar del carrito</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
-          </View>
-        ))}
+          ))
+        )}
 
-        <View style={styles.summaryContainer}>
-          <Text style={styles.summaryTitle}>TOTAL A PAGAR</Text>
-          <Text style={styles.summaryText}>Productos: {totalProducts}</Text>
-          <Text style={styles.summaryText}>Envios: 1</Text>
-          <Text style={styles.summaryText}>Costo de Envios: ${shippingCost} MXN</Text>
-          <Text style={styles.totalPrice}>$ {totalToPay} MXN</Text>
-          <TouchableOpacity style={styles.checkoutButton}>
-            <Text style={styles.checkoutButtonText}>COMPRAR CARRITO</Text>
+        <View style={[styles.summaryContainer, summaryContainerStyle]}>
+          <Text style={[styles.summaryTitle, { color: isDark ? '#fff' : '#000' }]}>
+            TOTAL A PAGAR
+          </Text>
+          <Text style={[styles.summaryText, { color: isDark ? '#fff' : '#000' }]}>
+            Productos: {totalProducts}
+          </Text>
+          <Text style={[styles.summaryText, { color: isDark ? '#fff' : '#000' }]}>Envios: 1</Text>
+          <Text style={[styles.summaryText, { color: isDark ? '#fff' : '#000' }]}>
+            Costo de Envios: ${shippingCost} MXN
+          </Text>
+          <Text style={[styles.totalPrice, { color: isDark ? '#fff' : '#000' }]}>
+            $ {totalToPay} MXN
+          </Text>
+          <TouchableOpacity
+            style={[
+              styles.checkoutButton,
+              { backgroundColor: isDark ? '#fff' : '#000', width: '100%' },
+            ]}
+            onPress={handleComprarCarrito}
+          >
+            <Text style={[styles.checkoutButtonText, { color: isDark ? '#000' : '#fff' }]}>
+              COMPRAR CARRITO
+            </Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -164,84 +272,85 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#000',
     marginBottom: 20,
-    padding: 10
+    padding: 10,
   },
   itemImage: {
     width: 100,
     height: 100,
-    marginRight: 10
+    marginRight: 10,
   },
   itemDetails: {
-    flex: 1
+    flex: 1,
   },
   itemName: {
     fontWeight: 'bold',
-    fontSize: 16
+    fontSize: 16,
   },
   itemSize: {
     fontSize: 14,
     color: '#555',
-    marginTop: 5
+    marginTop: 5,
   },
   itemStatus: {
     fontSize: 12,
     color: '#333',
-    marginTop: 5
+    marginTop: 5,
   },
   itemPrice: {
     fontWeight: 'bold',
     marginTop: 5,
-    fontSize: 16
+    fontSize: 16,
   },
   buttonsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 10
+    marginTop: 10,
   },
   secondaryButton: {
     borderWidth: 1,
     borderColor: '#000',
     padding: 8,
-    borderRadius: 5
+    borderRadius: 5,
   },
   primaryButton: {
     backgroundColor: '#000',
     padding: 8,
-    borderRadius: 5
+    borderRadius: 5,
   },
   primaryButtonText: {
-    color: '#fff'
+    color: '#fff',
   },
   summaryContainer: {
     borderWidth: 1,
     borderColor: '#000',
     padding: 15,
-    marginTop: 20
+    marginTop: 20,
   },
-  summaryTitle: {  // Corrected from sumaryTitle to summaryTitle
+  summaryTitle: {
+    // Corrected from sumaryTitle to summaryTitle
     fontWeight: 'bold',
     fontSize: 18,
-    marginBottom: 10
+    marginBottom: 10,
   },
   summaryText: {
     fontSize: 14,
-    marginBottom: 5
+    marginBottom: 5,
   },
   totalPrice: {
     fontWeight: 'bold',
     fontSize: 18,
-    marginTop: 10
+    marginTop: 10,
   },
   checkoutButton: {
     backgroundColor: '#000',
     padding: 15,
     alignItems: 'center',
     borderRadius: 5,
-    marginTop: 15
+    marginTop: 15,
   },
   checkoutButtonText: {
     color: '#fff',
-    fontWeight: 'bold'
+    fontWeight: 'bold',
   },
 });
 

@@ -1,66 +1,143 @@
-import React from 'react';
-import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet, ScrollView, FlatList } from 'react-native';
 import { useRouter } from 'expo-router';
+import {
+  Dimensions,
+  FlatList,
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useColorScheme,
+  View,
+} from 'react-native';
 
 const HomeScreen = () => {
   const router = useRouter();
+  const screenWidth = Dimensions.get('window').width;
+  const scheme = useColorScheme();
+  const isDark = scheme === 'dark';
 
   // Datos de productos
   const products = [
-    { id: '1', name: 'PLAYERA 1', price: '999 MXN', season: 'TEMPORADA 2', image: require('../../assets/images/shirt1.png') },
-    { id: '2', name: 'PLAYERA 2', price: '1500 MXN', season: 'TEMPORADA 3', image: require('../../assets/images/shirt2.png') },
-    { id: '3', name: 'PLAYERA 3', price: '1000 MXN', season: 'TEMPORADA 4', image: require('../../assets/images/shirt3.png') },
+    {
+      id: '1',
+      name: 'SHIRT ARAB',
+      price: '101 MXN',
+      season: 'TEMPORADA 2',
+      image: require('../../assets/images/shirt1.png'),
+    },
+    {
+      id: '2',
+      name: 'SHIRT DIAMOND TEETH',
+      price: '102 MXN',
+      season: 'TEMPORADA 3',
+      image: require('../../assets/images/shirt2.png'),
+    },
+    {
+      id: '3',
+      name: 'BOLL SHIRT 8',
+      price: '103 MXN',
+      season: 'TEMPORADA 4',
+      image: require('../../assets/images/shirt3.png'),
+    },
   ];
 
   const featuredProducts = [
-    { id: '4', name: 'PLAYER A', price: '3909 MXN', image: require('../../assets/images/shirt1.png') },
-    { id: '5', name: 'PLAYER B', price: '1500 MXN', image: require('../../assets/images/shirt2.png') },
-    { id: '6', name: 'PLAYER C', price: '1300 MXN', image: require('../../assets/images/shirt3.png') },
+    {
+      id: '4',
+      name: 'SHIRT ARAB',
+      price: '101 MXN',
+      image: require('../../assets/images/shirt1.png'),
+    },
+    {
+      id: '5',
+      name: 'SHIRT DIAMOND TEETH',
+      price: '102 MXN',
+      image: require('../../assets/images/shirt2.png'),
+    },
+    {
+      id: '6',
+      name: 'BOLL SHIRT 8',
+      price: '103 MXN',
+      image: require('../../assets/images/shirt3.png'),
+    },
   ];
 
   const navigateToProduct = (id: string) => {
-    router.push({ pathname: '/productos', params: { id } });
+    router.push({ pathname: '../productos', params: { id } });
+  };
+
+  // Ajuste responsivo para todas las tarjetas
+  const productCardStyle = {
+    width: screenWidth < 400 ? screenWidth * 0.9 : screenWidth * 0.45,
+    marginRight: 15,
+    backgroundColor: '#111',
+    borderRadius: 10,
+    padding: 12,
+    alignItems: 'center' as const,
+    marginBottom: 15,
+  };
+  const productImageStyle = {
+    width: productCardStyle.width * 0.85,
+    height: productCardStyle.width * 0.85,
+    marginBottom: -40,
+  };
+
+  interface Product {
+    id: string;
+    name: string;
+    price: string;
+    season?: string;
+    image: any;
+  }
+
+  const navigateToProductDetail = (product: Product) => {
+    router.push({
+      pathname: '/producto/producto-detalle',
+      params: {
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        image: product.image && typeof product.image === 'number' ? product.image : undefined,
+      },
+    });
   };
 
   return (
-    <View style={styles.container}>
-      {/* Barra superior con logo, búsqueda e iconos */}
-      <View style={styles.header}>
-        {/* Logo de la empresa */}
-        <Image 
-          source={require('../../assets/images/Logo.png')} 
-          style={styles.companyLogo}
-        />
-        
-        {/* Barra de búsqueda */}
-        <View style={styles.searchContainer}>
+    <View style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}>
+      {/* Header transparente superpuesto */}
+      <View
+        style={[
+          styles.header,
+          {
+            backgroundColor: 'transparent',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            zIndex: 2,
+          },
+        ]}
+      >
+        <Image source={require('../../assets/images/Logo.png')} style={styles.companyLogo} />
+        <View style={[styles.searchContainer, { justifyContent: 'center', alignItems: 'center' }]}>
           <TextInput
-            style={styles.searchBar}
+            style={[
+              styles.searchBar,
+              { width: screenWidth < 500 ? '80%' : 350, alignSelf: 'center' },
+            ]}
             placeholder="Buscar productos..."
             placeholderTextColor="#999"
           />
         </View>
-        
-        {/* Iconos */}
-        <View style={styles.iconsContainer}>
-          <TouchableOpacity onPress={() => router.push('/notificaciones')}>
-            <Image source={require('../../assets/images/notif.png')} style={styles.icon} />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.push('/carrito')}>
-            <Image source={require('../../assets/images/carro.jpg')} style={styles.icon} />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.push('/perfil')}>
-            <Image source={require('../../assets/images/perfil.png')} style={styles.icon} />
-          </TouchableOpacity>
-        </View>
       </View>
-
       {/* Contenido principal */}
       <ScrollView style={styles.content}>
         {/* Banner principal */}
         <View style={styles.bannerSection}>
-          <Image 
-            source={require('../../assets/images/PC.jpg')} 
+          <Image
+            source={require('../../assets/images/PC.jpg')}
             style={styles.bannerImage}
             resizeMode="cover"
           />
@@ -73,27 +150,32 @@ const HomeScreen = () => {
           horizontal
           data={products}
           renderItem={({ item }) => (
-            <TouchableOpacity style={styles.productCard} onPress={() => navigateToProduct(item.id)}>
-              <Image source={item.image} style={styles.productImage} />
+            <TouchableOpacity
+              style={productCardStyle}
+              onPress={() => navigateToProductDetail(item)}
+            >
+              <Image source={item.image} style={productImageStyle} resizeMode="contain" />
               <Text style={styles.productName}>{item.name}</Text>
               <Text style={styles.productPrice}>{item.price}</Text>
               <Text style={styles.productSeason}>{item.season}</Text>
             </TouchableOpacity>
           )}
-          keyExtractor={item => item.id}
+          keyExtractor={(item) => item.id}
           contentContainerStyle={styles.productsContainer}
           showsHorizontalScrollIndicator={false}
         />
 
         {/* Banner de preventa */}
         <View style={styles.presaleSection}>
-          <Image 
-            source={require('../../assets/images/banner.png')} 
+          <Image
+            source={require('../../assets/images/banner.png')}
             style={styles.presaleImage}
             resizeMode="cover"
           />
           <View style={styles.presaleTextContainer}>
-            <Text style={styles.presaleText}>COLECCIÓN EXCLUSIVA 2025 + ENVÍO GRATIS EN TU PRIMERA COMPRA</Text>
+            <Text style={styles.presaleText}>
+              COLECCIÓN EXCLUSIVA 2025 + ENVÍO GRATIS EN TU PRIMERA COMPRA
+            </Text>
             <Text style={styles.presaleTitle}>COLECCIÓN PREMIUM</Text>
           </View>
         </View>
@@ -101,9 +183,13 @@ const HomeScreen = () => {
         {/* Productos destacados */}
         <Text style={styles.sectionTitle}>LOS MÁS VENDIDOS</Text>
         <View style={styles.featuredGrid}>
-          {featuredProducts.map(product => (
-            <TouchableOpacity key={product.id} style={styles.featuredCard} onPress={() => navigateToProduct(product.id)}>
-              <Image source={product.image} style={styles.featuredImage} />
+          {featuredProducts.map((product) => (
+            <TouchableOpacity
+              key={product.id}
+              style={productCardStyle}
+              onPress={() => navigateToProductDetail(product)}
+            >
+              <Image source={product.image} style={productImageStyle} resizeMode="contain" />
               <Text style={styles.featuredName}>{product.name}</Text>
               <Text style={styles.featuredPrice}>{product.price}</Text>
             </TouchableOpacity>
@@ -198,20 +284,8 @@ const styles = StyleSheet.create({
     paddingLeft: 15,
     paddingBottom: 10,
   },
-  productCard: {
-    width: 430,
-    marginRight: 15,
-    backgroundColor: '#111',
-    borderRadius: 10,
-    padding: 12,
-    alignItems: 'center',
-  },
-  productImage: {
-    width: 380,
-    height: 380,
-    resizeMode: 'contain',
-    marginBottom: -52,
-  },
+  // Ajustar productCard para que sea responsivo usando dimensiones relativas al ancho de la pantalla para evitar problemas de diseño en pantallas pequeñas
+
   productName: {
     color: '#fff',
     fontWeight: 'bold',
@@ -246,6 +320,8 @@ const styles = StyleSheet.create({
     right: 0,
     backgroundColor: 'rgba(0,0,0,0.6)',
     padding: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   presaleText: {
     color: '#fff',
@@ -265,20 +341,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 15,
     marginBottom: 20,
-  },
-  featuredCard: {
-   width: 430,
-    marginRight: 15,
-    backgroundColor: '#111',
-    borderRadius: 10,
-    padding: 12,
-    alignItems: 'center',
-  },
-  featuredImage: {
-    width: 380,
-    height: 380,
-    resizeMode: 'contain',
-    marginBottom: -80,
   },
   featuredName: {
     color: '#fff',

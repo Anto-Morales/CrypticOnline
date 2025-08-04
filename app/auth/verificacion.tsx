@@ -9,7 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Dimensions,
-  ScrollView
+  ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 
@@ -24,7 +24,7 @@ const VerifyCodeScreen: React.FC = () => {
     const newCode = [...code];
     newCode[index] = value;
     setCode(newCode);
-    
+
     // Auto-focus to next input
     if (value && index < 3) {
       // You'll need to add refs to your TextInputs to implement this
@@ -37,17 +37,17 @@ const VerifyCodeScreen: React.FC = () => {
 
   const handleSubmit = () => {
     console.log(`Verification code: ${code.join('')}`);
-    router.push('/(tabs)/home');
+    router.push('../auth/NewPassword');
   };
 
   const handleGoBack = () => {
-    router.push('/(tabs)/Nvpassword');
+    router.push('../auth/Nvpassword');
   };
 
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <View style={[styles.mainContainer, isSmallScreen && styles.smallScreenContainer]}>
@@ -63,10 +63,13 @@ const VerifyCodeScreen: React.FC = () => {
               resizeMode="contain"
             />
 
-            <Text style={[styles.title, isSmallScreen && styles.smallTitle]}>VERIFICACION DE EMAIL</Text>
+            <Text style={[styles.title, isSmallScreen && styles.smallTitle]}>
+              VERIFICACION DE EMAIL
+            </Text>
             <Text style={[styles.description, isSmallScreen && styles.smallDescription]}>
-              Hemos enviado un código de verificación a tu dirección de correo electrónico.
-              Por favor, revisa tu bandeja de entrada (y también la carpeta de spam) e ingresa el código para continuar.
+              Hemos enviado un código de verificación a tu dirección de correo electrónico. Por
+              favor, revisa tu bandeja de entrada (y también la carpeta de spam) e ingresa el código
+              para continuar.
             </Text>
 
             <View style={[styles.codeContainer, isSmallScreen && styles.smallCodeContainer]}>
@@ -88,8 +91,8 @@ const VerifyCodeScreen: React.FC = () => {
               </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity 
-              style={[styles.button, isSmallScreen && styles.smallButton]} 
+            <TouchableOpacity
+              style={[styles.button, isSmallScreen && styles.smallButton]}
               onPress={handleSubmit}
             >
               <Text style={styles.buttonText}>ENVIAR</Text>
@@ -115,7 +118,7 @@ const VerifyCodeScreen: React.FC = () => {
 export default VerifyCodeScreen;
 
 const styles = StyleSheet.create({
-  container: { 
+  container: {
     flex: 1,
   },
   scrollContainer: {
@@ -129,7 +132,7 @@ const styles = StyleSheet.create({
   smallScreenContainer: {
     flexDirection: 'column',
   },
-  leftContainer: { 
+  leftContainer: {
     flex: 1,
     paddingHorizontal: 40,
     paddingVertical: 30,
@@ -143,7 +146,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 20,
   },
-  rightContainer: { 
+  rightContainer: {
     flex: 1,
     backgroundColor: '#f5f5f5',
   },
@@ -151,11 +154,11 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     marginBottom: 20,
   },
-  backButton: { 
+  backButton: {
     fontSize: 28,
     color: '#000',
   },
-  logo: { 
+  logo: {
     width: 300,
     height: 250,
     marginBottom: -40,
@@ -168,7 +171,7 @@ const styles = StyleSheet.create({
     marginBottom: -20,
     marginTop: 0,
   },
-  title: { 
+  title: {
     fontSize: 20,
     fontWeight: 'bold',
     marginBottom: 20,
@@ -179,7 +182,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     marginBottom: 15,
   },
-  description: { 
+  description: {
     marginBottom: 30,
     fontSize: 15,
     color: '#666',
@@ -191,8 +194,8 @@ const styles = StyleSheet.create({
     marginBottom: 25,
     lineHeight: 20,
   },
-  codeContainer: { 
-    flexDirection: 'row', 
+  codeContainer: {
+    flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 30,
     paddingHorizontal: 40,
@@ -216,7 +219,7 @@ const styles = StyleSheet.create({
     height: 45,
     fontSize: 16,
   },
-  resendText: { 
+  resendText: {
     color: '#000',
     marginBottom: 20,
     fontSize: 14,
