@@ -29,7 +29,6 @@ const SelecTarjeta = () => {
   const [cardData, setCardData] = useState<any[]>([]);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
 
-  // Recibir y normalizar params
   const nombre = Array.isArray(params.nombre) ? params.nombre[0] : params.nombre || '';
   const imagenIndexStr = Array.isArray(params.imagen) ? params.imagen[0] : params.imagen || '0';
   const precioStr = Array.isArray(params.precio) ? params.precio[0] : params.precio || '0';
@@ -116,80 +115,36 @@ const SelecTarjeta = () => {
     );
   };
 
+  const renderProductSummary = () => (
+    <View style={styles.productSummary}>
+      <Text style={styles.summaryTitle}>Resumen del producto</Text>
+      {imagenes[imagenIndex] && (
+        <Image source={imagenes[imagenIndex]} style={styles.productImage} />
+      )}
+      <Text style={styles.productName}>{nombre}</Text>
+      <Text style={styles.productDetail}>Precio: ${precio.toFixed(2)}</Text>
+      <Text style={styles.productDetail}>Envío: ${envio.toFixed(2)}</Text>
+      <Text style={styles.productTotal}>Total: ${total.toFixed(2)}</Text>
+    </View>
+  );
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        {/* Panel izquierdo */}
-        <View style={styles.cardsPanel}>
-          <View style={styles.header}>
-            <Text style={styles.title}>Selecciona una tarjeta para pagar</Text>
-            <Text style={styles.subtitle}>Elige tu método de pago favorito</Text>
-          </View>
+        {isSmallScreen ? (
+          <View style={styles.mobileContainer}>
+            <Text style={styles.sectionTitle}>Selecciona una tarjeta de pago</Text>
 
-          {cardData.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>
-                No hay tarjetas disponibles. Agrega una desde la sección &apos;Mis Tarjetas&apos;.
-              </Text>
-            </View>
-          ) : (
             <FlatList
               data={cardData}
               renderItem={renderCardItem}
               keyExtractor={(item) => item.id}
-              contentContainerStyle={styles.listContainer}
+              contentContainerStyle={{ paddingBottom: 180 }}
               showsVerticalScrollIndicator={false}
+              ListFooterComponent={renderProductSummary}
             />
-          )}
 
-          {isSmallScreen && (
-            <>
-              <View style={styles.productSummary}>
-                <Text style={styles.summaryTitle}>Resumen del producto</Text>
-                {imagenes[imagenIndex] && (
-                  <Image source={imagenes[imagenIndex]} style={styles.productImage} />
-                )}
-                <Text style={styles.productName}>{nombre}</Text>
-                <Text style={styles.productDetail}>Precio: ${precio.toFixed(2)}</Text>
-                <Text style={styles.productDetail}>Envío: ${envio.toFixed(2)}</Text>
-                <Text style={styles.productTotal}>Total: ${total.toFixed(2)}</Text>
-              </View>
-
-              <TouchableOpacity
-                style={[styles.button, styles.primaryButton]}
-                onPress={() => router.push('/tarjeta/tarjeta')}
-              >
-                <MaterialIcons name="add" size={24} color="#fff" />
-                <Text style={styles.buttonText}>Agregar Tarjeta</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.button, !selectedCardId ? styles.disabledButton : styles.payButton]}
-                onPress={handlePay}
-                disabled={!selectedCardId}
-              >
-                <MaterialIcons name="payment" size={24} color="#fff" />
-                <Text style={styles.buttonText}>Pagar</Text>
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
-
-        {/* Panel derecho en pantallas grandes */}
-        {!isSmallScreen && (
-          <View style={styles.actionsPanel}>
-            <View style={styles.productSummary}>
-              <Text style={styles.summaryTitle}>Resumen del producto</Text>
-              {imagenes[imagenIndex] && (
-                <Image source={imagenes[imagenIndex]} style={styles.productImage} />
-              )}
-              <Text style={styles.productName}>{nombre}</Text>
-              <Text style={styles.productDetail}>Precio: ${precio.toFixed(2)}</Text>
-              <Text style={styles.productDetail}>Envío: ${envio.toFixed(2)}</Text>
-              <Text style={styles.productTotal}>Total: ${total.toFixed(2)}</Text>
-            </View>
-
-            <View style={styles.buttonsContainer}>
+            <View style={styles.fixedButtons}>
               <TouchableOpacity
                 style={[styles.button, styles.primaryButton]}
                 onPress={() => router.push('/tarjeta/tarjeta')}
@@ -208,6 +163,57 @@ const SelecTarjeta = () => {
               </TouchableOpacity>
             </View>
           </View>
+        ) : (
+          <>
+            <View style={styles.cardsPanel}>
+              <View style={styles.header}>
+                <Text style={styles.title}>Selecciona una tarjeta para pagar</Text>
+                <Text style={styles.subtitle}>Elige tu método de pago favorito</Text>
+              </View>
+
+              {cardData.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyText}>
+                    No te preocupes, no se ha hecho ning&#39;un cargo a tu cuenta
+                  </Text>
+                </View>
+              ) : (
+                <FlatList
+                  data={cardData}
+                  renderItem={renderCardItem}
+                  keyExtractor={(item) => item.id}
+                  contentContainerStyle={styles.listContainer}
+                  showsVerticalScrollIndicator={false}
+                />
+              )}
+            </View>
+
+            <View style={styles.actionsPanel}>
+              {renderProductSummary()}
+
+              <View style={styles.buttonsContainer}>
+                <TouchableOpacity
+                  style={[styles.button, styles.primaryButton]}
+                  onPress={() => router.push('/tarjeta/tarjeta')}
+                >
+                  <MaterialIcons name="add" size={24} color="#fff" />
+                  <Text style={styles.buttonText}>Agregar Tarjeta</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.button,
+                    !selectedCardId ? styles.disabledButton : styles.payButton,
+                  ]}
+                  onPress={handlePay}
+                  disabled={!selectedCardId}
+                >
+                  <MaterialIcons name="payment" size={24} color="#fff" />
+                  <Text style={styles.buttonText}>Pagar</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </>
         )}
       </View>
     </SafeAreaView>
@@ -223,6 +229,26 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     backgroundColor: '#fff',
+  },
+  mobileContainer: {
+    flex: 1,
+    padding: 20,
+    paddingBottom: 100, // espacio visual
+  },
+  fixedButtons: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#fff',
+    padding: 15,
+    borderTopWidth: 1,
+    borderTopColor: '#dee2e6',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 10,
   },
   cardsPanel: {
     flex: 2,
@@ -259,8 +285,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 6,
     elevation: 3,
-    flexDirection: 'column',
-    justifyContent: 'space-between',
   },
   selectedCard: {
     borderWidth: 3,
@@ -306,11 +330,6 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
     borderRadius: 10,
     marginBottom: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
     backgroundColor: '#000',
   },
   primaryButton: {
@@ -344,7 +363,7 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 12,
     alignItems: 'center',
-    marginBottom: 30,
+    marginTop: 30,
   },
   summaryTitle: {
     fontSize: 18,
@@ -375,6 +394,14 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#28a745',
     marginTop: 10,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    marginTop: 20,
+    color: '#212529',
+    textAlign: 'center',
   },
 });
 
