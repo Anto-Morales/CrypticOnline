@@ -5,12 +5,14 @@ import express from 'express';
 // Routes
 import authRoutes from './routes/auth.routes.js';
 import paymentRoutes from './routes/payment.routes.fixed.js'; // RESTAURADO
+import paymentCardsRoutes from './routes/paymentCards.routes.js'; // NUEVAS RUTAS DE TARJETAS
 import productsRoutes from './routes/products.routes.js';
 import simpleProductsRoutes from './routes/simple-products.routes.js';
 // import simplePaymentRoutes from './routes/simple-payment.routes.js'; // Ya no necesario
 
 import notificationRoutes from './routes/notification.routes.js';
-import userOrdersRoutes from './routes/user-orders.routes.js';
+import orderRoutes from './routes/order.routes.js';
+import paymentsRoutes from './routes/payments.routes.js';
 import userRoutes from './routes/user.routes.js';
 
 dotenv.config();
@@ -82,9 +84,11 @@ app.use('/api/auth', authRoutes);
 app.use('/api/products', productsRoutes);
 app.use('/api/simple-products', simpleProductsRoutes); // Rutas simples para pruebas
 app.use('/api/payments', detectRetryMiddleware, paymentRoutes); // Rutas completas de MercadoPago
-app.use('/api/orders', userOrdersRoutes); // Rutas de órdenes de usuario
+app.use('/api/payment-cards', paymentCardsRoutes); // 🃏 RUTAS DE TARJETAS DE PAGO
+app.use('/api/orders', orderRoutes); // 📦 RUTAS DE ÓRDENES (usando order.routes.js existente)
 app.use('/api/user', userRoutes); // NUEVA RUTA PARA USUARIO
 app.use('/api/notifications', notificationRoutes); // NUEVA RUTA PARA NOTIFICACIONES
+app.use('/api/payments', paymentsRoutes); // NUEVA RUTA PARA PAGOS
 console.log('✅ Rutas registradas');
 
 // Root endpoint
@@ -105,6 +109,11 @@ app.get('/', (req, res) => {
       'POST /api/simple-products/create',
       'POST /api/payments/create',
       'POST /api/payments/webhook',
+      'GET /api/payment-cards',
+      'POST /api/payment-cards',
+      'POST /api/orders',
+      'GET /api/orders',
+      'GET /api/orders/:id',
     ],
   });
 });
@@ -122,6 +131,7 @@ app.get('/api/health', (req, res) => {
       '/api/products/*',
       '/api/simple-products/*',
       '/api/payments/*',
+      '/api/payment-cards/*',
       '/api/orders/*',
       '/api/user/*',
       '/api/notifications/*',
@@ -194,6 +204,10 @@ app.use('*', (req, res) => {
       'GET /api/simple-products',
       'POST /api/payments/create',
       'POST /api/payments/webhook',
+      'POST /api/payments/pay-with-card',
+      'GET /api/payment-cards',
+      'POST /api/payment-cards',
+      'POST /api/orders',
       'GET /api/orders',
       'GET /api/orders/:id',
     ],

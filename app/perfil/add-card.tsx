@@ -2,20 +2,21 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Stack, useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
-  Alert,
-  Keyboard,
-  KeyboardAvoidingView,
-  Platform,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
-  useColorScheme,
-  View,
+    Alert,
+    Keyboard,
+    KeyboardAvoidingView,
+    Platform,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    TouchableWithoutFeedback,
+    useColorScheme,
+    View,
 } from 'react-native';
+import { createApiUrl, createAuthHeaders } from '../config/api';
 
 export default function AddCardScreen() {
   const router = useRouter();
@@ -64,61 +65,87 @@ export default function AddCardScreen() {
     return 'unknown';
   };
 
-  // Validar formulario
-  const validateForm = () => {
-    if (!formData.cardNumber || formData.cardNumber.replace(/\s/g, '').length < 13) {
-      Alert.alert('Error', 'Por favor ingresa un número de tarjeta válido');
-      return false;
+  // Función corregida para manejar submit con async/await
+  const handleSubmitAsync = async () => {
+    // Validaciones básicas
+    if (!formData.cardNumber || !formData.cardHolder || !formData.expiryDate || !formData.cvv) {
+      Alert.alert('Error', 'Todos los campos son obligatorios');
+      return;
     }
-    if (!formData.cardHolder.trim()) {
-      Alert.alert('Error', 'Por favor ingresa el nombre del titular');
-      return false;
+    
+    // Detectar tipo de tarjeta para validar CVV
+    const cardType = detectCardType(formData.cardNumber);
+    const expectedCVVLength = cardType === 'amex' ? 4 : 3;
+    if (formData.cvv.length !== expectedCVVLength) {
+      Alert.alert(
+        'CVV Inválido', 
+        `El CVV debe tener ${expectedCVVLength} dígitos para tarjetas ${cardType.toUpperCase()}`
+      );
+      return;
     }
-    if (!formData.expiryDate || formData.expiryDate.length !== 5) {
-      Alert.alert('Error', 'Por favor ingresa una fecha de expiración válida (MM/YY)');
-      return false;
-    }
-    if (!formData.cvv || formData.cvv.length < 3) {
-      Alert.alert('Error', 'Por favor ingresa un CVV válido');
-      return false;
-    }
-    return true;
-  };
-
-  // Guardar tarjeta
-  const saveCard = async () => {
-    if (!validateForm()) return;
 
     setLoading(true);
     try {
-      // Obtener tarjetas existentes
-      const existingCards = await AsyncStorage.getItem('paymentCards');
-      const cards = existingCards ? JSON.parse(existingCards) : [];
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        Alert.alert('Error', 'No se encontró token de autenticación');
+        setLoading(false);
+        return;
+      }
 
       // Crear nueva tarjeta
       const newCard = {
-        id: Date.now().toString(),
         cardNumber: formData.cardNumber.replace(/\s/g, ''),
         cardHolder: formData.cardHolder.trim().toUpperCase(),
         expiryDate: formData.expiryDate,
+        cvv: formData.cvv,
         cardType: detectCardType(formData.cardNumber),
-        isDefault: cards.length === 0, // Primera tarjeta es predeterminada
-        createdAt: new Date().toISOString(),
       };
 
-      // Guardar tarjetas actualizadas
-      cards.push(newCard);
-      await AsyncStorage.setItem('paymentCards', JSON.stringify(cards));
-
-      Alert.alert('Éxito', 'Tarjeta agregada correctamente', [
-        {
-          text: 'OK',
-          onPress: () => router.back(),
+      console.log('💳 Guardando nueva tarjeta...');
+      const response = await fetch(createApiUrl('/api/payment-cards'), {
+        method: 'POST',
+        headers: {
+          ...createAuthHeaders(token),
+          'Content-Type': 'application/json',
         },
-      ]);
+        body: JSON.stringify(newCard),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('✅ Tarjeta guardada exitosamente:', result);
+        
+        Alert.alert('Éxito', 'Tarjeta agregada correctamente', [
+          {
+            text: 'OK',
+            onPress: () => router.back(),
+          },
+        ]);
+      } else {
+        const errorData = await response.json();
+        console.error('❌ Error guardando tarjeta:', response.status, errorData);
+        
+        // Manejar errores específicos
+        let errorMessage = 'No se pudo guardar la tarjeta';
+        
+        if (errorData.details && errorData.details.includes('cardholder.identification.type')) {
+          errorMessage = 'Error de configuración del país. Por favor contacta al soporte.';
+        } else if (errorData.details && errorData.details.includes('card_number')) {
+          errorMessage = 'Número de tarjeta inválido. Verifica que sea correcto.';
+        } else if (errorData.details && errorData.details.includes('expiration')) {
+          errorMessage = 'Fecha de expiración inválida. Usa formato MM/YY.';
+        } else if (errorData.details && errorData.details.includes('security_code')) {
+          errorMessage = 'CVV inválido. Verifica el código de seguridad.';
+        } else if (errorData.message) {
+          errorMessage = errorData.message;
+        }
+        
+        Alert.alert('Error al Agregar Tarjeta', errorMessage);
+      }
     } catch (error) {
-      console.error('Error guardando tarjeta:', error);
-      Alert.alert('Error', 'No se pudo guardar la tarjeta');
+      console.error('❌ Error guardando tarjeta:', error);
+      Alert.alert('Error', 'Error de conexión al guardar la tarjeta');
     } finally {
       setLoading(false);
     }
@@ -246,6 +273,9 @@ export default function AddCardScreen() {
                   <Text style={[styles.securityText, { color: isDark ? '#666' : '#999' }]}>
                     🔒 Tu información está protegida con encriptación de extremo a extremo
                   </Text>
+                  <Text style={[styles.securityText, { color: isDark ? '#666' : '#999', marginTop: 4 }]}>
+                    🇲🇽 Procesado con MercadoPago México
+                  </Text>
                 </View>
 
                 {/* Botón guardar */}
@@ -257,7 +287,7 @@ export default function AddCardScreen() {
                       opacity: loading ? 0.7 : 1,
                     },
                   ]}
-                  onPress={saveCard}
+                  onPress={handleSubmitAsync}
                   disabled={loading}
                 >
                   <Text style={styles.saveButtonText}>

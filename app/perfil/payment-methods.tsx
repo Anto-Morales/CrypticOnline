@@ -10,15 +10,16 @@ import {
   Text,
   TouchableOpacity,
   useColorScheme,
-  View,
+  View
 } from 'react-native';
+import { createApiUrl, createAuthHeaders } from '../config/api';
 
 interface PaymentCard {
-  id: string;
+  id: number;
   cardNumber: string;
   cardHolder: string;
   expiryDate: string;
-  cardType: 'visa' | 'mastercard' | 'amex';
+  cardType: 'visa' | 'mastercard' | 'amex' | 'unknown';
   isDefault: boolean;
   createdAt: string;
 }
@@ -31,20 +32,45 @@ export default function PaymentMethodsScreen() {
   const [cards, setCards] = useState<PaymentCard[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Cargar tarjetas guardadas
+  // Cargar tarjetas desde la API
   const loadCards = useCallback(async () => {
     try {
-      const storedCards = await AsyncStorage.getItem('paymentCards');
-      if (storedCards) {
-        const parsedCards = JSON.parse(storedCards);
-        setCards(parsedCards);
+      setLoading(true);
+      const token = await AsyncStorage.getItem('token');
+      
+      if (!token) {
+        console.log('❌ No hay token, redirigiendo a login');
+        router.push('/auth/login');
+        return;
+      }
+
+      console.log('🃏 Cargando tarjetas desde API...');
+      const response = await fetch(createApiUrl('/api/payment-cards'), {
+        method: 'GET',
+        headers: createAuthHeaders(token),
+      });
+
+      console.log('📡 Respuesta tarjetas:', response.status);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('✅ Tarjetas cargadas:', data.cards?.length || 0);
+        setCards(data.cards || []);
+      } else if (response.status === 401) {
+        console.log('🔄 Token inválido, redirigiendo a login');
+        await AsyncStorage.multiRemove(['token', 'userRole', 'userData']);
+        router.push('/auth/login');
+      } else {
+        console.error('❌ Error cargando tarjetas:', response.status);
+        Alert.alert('Error', 'No se pudieron cargar las tarjetas de pago');
       }
     } catch (error) {
-      console.error('Error cargando tarjetas:', error);
+      console.error('❌ Error de conexión cargando tarjetas:', error);
+      Alert.alert('Error', 'Error de conexión. Verifica tu internet.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [router]);
 
   useFocusEffect(
     useCallback(() => {
@@ -53,7 +79,7 @@ export default function PaymentMethodsScreen() {
   );
 
   // Eliminar tarjeta
-  const deleteCard = (cardId: string) => {
+  const deleteCard = (cardId: number) => {
     Alert.alert('Eliminar Tarjeta', '¿Estás seguro de que quieres eliminar esta tarjeta?', [
       { text: 'Cancelar', style: 'cancel' },
       {
@@ -61,11 +87,27 @@ export default function PaymentMethodsScreen() {
         style: 'destructive',
         onPress: async () => {
           try {
-            const updatedCards = cards.filter((card) => card.id !== cardId);
-            await AsyncStorage.setItem('paymentCards', JSON.stringify(updatedCards));
-            setCards(updatedCards);
+            const token = await AsyncStorage.getItem('token');
+            if (!token) return;
+
+            console.log('🗑️ Eliminando tarjeta:', cardId);
+            const response = await fetch(createApiUrl(`/api/payment-cards/${cardId}`), {
+              method: 'DELETE',
+              headers: createAuthHeaders(token),
+            });
+
+            if (response.ok) {
+              console.log('✅ Tarjeta eliminada exitosamente');
+              // Recargar tarjetas
+              loadCards();
+              Alert.alert('Éxito', 'Tarjeta eliminada exitosamente');
+            } else {
+              console.error('❌ Error eliminando tarjeta:', response.status);
+              Alert.alert('Error', 'No se pudo eliminar la tarjeta');
+            }
           } catch (error) {
-            console.error('Error eliminando tarjeta:', error);
+            console.error('❌ Error eliminando tarjeta:', error);
+            Alert.alert('Error', 'Error de conexión al eliminar tarjeta');
           }
         },
       },
@@ -73,16 +115,28 @@ export default function PaymentMethodsScreen() {
   };
 
   // Establecer como predeterminada
-  const setDefaultCard = async (cardId: string) => {
+  const setDefaultCard = async (cardId: number) => {
     try {
-      const updatedCards = cards.map((card) => ({
-        ...card,
-        isDefault: card.id === cardId,
-      }));
-      await AsyncStorage.setItem('paymentCards', JSON.stringify(updatedCards));
-      setCards(updatedCards);
+      const token = await AsyncStorage.getItem('token');
+      if (!token) return;
+
+      console.log('⭐ Estableciendo tarjeta predeterminada:', cardId);
+      const response = await fetch(createApiUrl(`/api/payment-cards/${cardId}/default`), {
+        method: 'PUT',
+        headers: createAuthHeaders(token),
+      });
+
+      if (response.ok) {
+        console.log('✅ Tarjeta predeterminada actualizada');
+        // Recargar tarjetas para mostrar el cambio
+        loadCards();
+      } else {
+        console.error('❌ Error estableciendo predeterminada:', response.status);
+        Alert.alert('Error', 'No se pudo establecer como predeterminada');
+      }
     } catch (error) {
-      console.error('Error estableciendo tarjeta predeterminada:', error);
+      console.error('❌ Error estableciendo predeterminada:', error);
+      Alert.alert('Error', 'Error de conexión');
     }
   };
 
@@ -96,8 +150,13 @@ export default function PaymentMethodsScreen() {
       case 'amex':
         return require('../../assets/images/payment-icons/amex.png');
       default:
-        return require('../../assets/images/payment-method-efective.png');
+        return require('../../assets/images/credit-cards.png');
     }
+  };
+
+  // Función para determinar si el icono necesita tintColor
+  const needsTintColor = (cardType: string) => {
+    return !['visa', 'mastercard', 'amex'].includes(cardType.toLowerCase());
   };
 
   // Obtener color de la tarjeta según el tipo
@@ -145,14 +204,25 @@ export default function PaymentMethodsScreen() {
         <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
           {/* Botón para agregar nueva tarjeta */}
           <TouchableOpacity
-            style={[styles.addCardButton, { backgroundColor: isDark ? '#111' : '#fff' }]}
+            style={[
+              styles.addCardButton,
+              {
+                backgroundColor: isDark ? 'rgba(34, 197, 94, 0.15)' : 'rgba(34, 197, 94, 0.1)',
+                borderColor: isDark ? 'rgba(34, 197, 94, 0.4)' : 'rgba(34, 197, 94, 0.3)',
+                borderWidth: 1.5,
+              }
+            ]}
             onPress={() => router.push('/perfil/add-card')}
           >
             <View style={styles.addCardContent}>
-              <View style={[styles.addIconContainer, { backgroundColor: '#007bff' }]}>
-                <Text style={styles.addIcon}>+</Text>
+              <View style={[styles.addIconContainer, { backgroundColor: '#22c55e' }]}>
+                <Image
+                  source={require('../../assets/images/credit-cards.png')}
+                  style={[styles.addCardIcon, { tintColor: '#fff' }]}
+                  resizeMode="contain"
+                />
               </View>
-              <Text style={[styles.addCardText, { color: isDark ? '#fff' : '#000' }]}>
+              <Text style={[styles.addCardText, { color: isDark ? '#4ade80' : '#16a34a' }]}>
                 Agregar Nueva Tarjeta
               </Text>
             </View>
@@ -166,12 +236,20 @@ export default function PaymentMethodsScreen() {
               </Text>
 
               {cards.map((card) => (
-                <View key={card.id} style={styles.cardItem}>
+                <View key={card.id} style={[
+                  styles.cardItem,
+                  { borderBottomColor: isDark ? '#333' : '#e9ecef' }
+                ]}>
                   <View style={styles.cardContent}>
                     <View style={styles.cardLeft}>
                       <Image
                         source={getCardIcon(card.cardType)}
-                        style={styles.cardTypeIcon}
+                        style={[
+                          styles.cardTypeIcon,
+                          needsTintColor(card.cardType) 
+                            ? { tintColor: isDark ? '#fff' : '#000' } 
+                            : {}
+                        ]}
                         resizeMode="contain"
                       />
                       <View style={styles.cardInfo}>
@@ -217,8 +295,8 @@ export default function PaymentMethodsScreen() {
           ) : (
             <View style={styles.emptyState}>
               <Image
-                source={require('../../assets/images/payment-method-efective.png')}
-                style={[styles.emptyIcon, { tintColor: isDark ? '#666' : '#ccc' }]}
+                source={require('../../assets/images/credit-cards.png')}
+                style={[styles.emptyIcon, { tintColor: isDark ? '#888' : '#999' }]}
                 resizeMode="contain"
               />
               <Text style={[styles.emptyTitle, { color: isDark ? '#fff' : '#000' }]}>
@@ -247,11 +325,11 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 20,
     marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowColor: '#22c55e',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 6,
   },
   addCardContent: {
     flexDirection: 'row',
@@ -270,9 +348,14 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
   },
+  addCardIcon: {
+    width: 24,
+    height: 24,
+  },
   addCardText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   cardsContainer: {
     borderRadius: 16,
@@ -290,7 +373,6 @@ const styles = StyleSheet.create({
   },
   cardItem: {
     borderBottomWidth: 1,
-    borderBottomColor: '#e9ecef',
     paddingBottom: 16,
     marginBottom: 16,
   },
@@ -302,6 +384,7 @@ const styles = StyleSheet.create({
   cardLeft: {
     flexDirection: 'row',
     flex: 1,
+    alignItems: 'center',
   },
   cardTypeIcon: {
     width: 40,

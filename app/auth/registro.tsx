@@ -118,6 +118,20 @@ const RegisterScreen: React.FC = () => {
   const handleRegister = async () => {
     if (validateForm()) {
       try {
+        // 🔧 CONFIGURACIÓN AUTOMÁTICA DE URL
+        let baseUrl = process.env.EXPO_PUBLIC_NGROK_URL || process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+        
+        // 🚨 FALLBACK URL SI LAS VARIABLES NO FUNCIONAN
+        const FALLBACK_NGROK_URL = 'https://ee8f4b054d44.ngrok-free.app';
+        
+        // 🌐 DETECCIÓN AUTOMÁTICA DE ENTORNO
+        if (!process.env.EXPO_PUBLIC_NGROK_URL && !process.env.EXPO_PUBLIC_API_URL) {
+          console.log('⚠️ Variables de entorno no disponibles en registro, usando fallback');
+          baseUrl = FALLBACK_NGROK_URL;
+        }
+        
+        console.log('🔗 URL Base detectada en registro:', baseUrl);
+        
         // Separa los apellidos en paterno y materno
         const [apellidoPaterno, apellidoMaterno = ''] = formData.apellidos.split(' ');
         const userPayload = {
@@ -137,12 +151,24 @@ const RegisterScreen: React.FC = () => {
           wallet: '',
           role: 'customer',
         };
-        const response = await fetch('http://192.168.0.108:3000/api/user/register', {
+
+        const fullUrl = `${baseUrl}/api/user/register`;
+        console.log('👤 Registrando usuario en:', fullUrl);
+        
+        const response = await fetch(fullUrl, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            // 🔒 HEADERS PARA NGROK
+            'ngrok-skip-browser-warning': 'true',
+            'User-Agent': 'CrypticOnline-Mobile-App',
+          },
           body: JSON.stringify(userPayload),
         });
+        
         const data = await response.json();
+        console.log('📡 Response registro:', { status: response.status, ok: response.ok });
+        
         if (response.ok && data.token) {
           await AsyncStorage.setItem('token', data.token);
           Alert.alert('Registro exitoso', data.message || 'Usuario creado correctamente');
@@ -154,6 +180,7 @@ const RegisterScreen: React.FC = () => {
           Alert.alert('Error ' + response.status, data.error || JSON.stringify(data));
         }
       } catch (error) {
+        console.error('❌ Error registro:', error);
         Alert.alert('Error', 'No se pudo conectar con el backend');
       }
     }

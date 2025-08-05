@@ -1,25 +1,25 @@
 import express from 'express';
 import {
-  createOrder,
-  getOrderByIdCorrected,
-  getOrderByPreferenceIdCorrected,
-  getUserOrders,
+    createOrder,
+    getOrderByIdCorrected,
+    getOrderByPreferenceIdCorrected,
+    getUserOrders,
 } from '../controllers/order.controller.js';
-import { authenticateToken } from '../middleware/auth.middleware.js';
+import { authMiddleware } from '../middleware/auth.middleware.js';
 
 const router = express.Router();
 
 // Crear una nueva orden
-router.post('/', authenticateToken, createOrder);
+router.post('/', authMiddleware, createOrder);
 
 // Obtener todas las órdenes del usuario
-router.get('/', authenticateToken, getUserOrders);
+router.get('/', authMiddleware, getUserOrders);
 
 // Obtener orden por preference ID (debe ir antes que /:orderId)
-router.get('/by-preference/:preferenceId', authenticateToken, getOrderByPreferenceIdCorrected);
+router.get('/by-preference/:preferenceId', authMiddleware, getOrderByPreferenceIdCorrected);
 
 // Obtener orden específica por ID
-router.get('/:orderId', authenticateToken, getOrderByIdCorrected);
+router.get('/:orderId', authMiddleware, getOrderByIdCorrected);
 
 console.log('✅ Rutas de órdenes registradas (CORREGIDAS):');
 console.log('  - POST /api/orders');

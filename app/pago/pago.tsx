@@ -27,6 +27,36 @@ import { useCarrito } from '../context/CarritoContext';
 import { usePaymentNotifications } from '../hooks/usePaymentNotifications';
 import { usePaymentReturnHandler } from '../hooks/usePaymentReturnHandler';
 
+// Tipos de datos para las tarjetas
+interface PaymentCard {
+  id: number;
+  cardType: string;
+  cardNumber: string;
+  cardHolder: string;
+  expiryDate: string;
+  isDefault: boolean;
+  createdAt: string;
+}
+
+// Función auxiliar para obtener icono de tarjeta
+const getCardIcon = (cardType: string) => {
+  switch (cardType.toLowerCase()) {
+    case 'visa':
+      return require('../../assets/images/payment-icons/visa.png');
+    case 'mastercard':
+      return require('../../assets/images/payment-icons/mastercard.png');
+    case 'amex':
+      return require('../../assets/images/payment-icons/amex.png');
+    default:
+      return require('../../assets/images/credit-cards.png');
+  }
+};
+
+// Función auxiliar para determinar si necesita tintColor
+const needsTintColor = (cardType: string) => {
+  return !['visa', 'mastercard', 'amex'].includes(cardType.toLowerCase());
+};
+
 export default function PagoScreen() {
   const scheme = useColorScheme();
   const isDark = scheme === 'dark';
@@ -34,6 +64,18 @@ export default function PagoScreen() {
   const cardBg = isDark ? '#222' : '#f5f5f5';
   const textColor = isDark ? '#fff' : '#000';
   const [loading, setLoading] = useState(false);
+  const [savedCards, setSavedCards] = useState<PaymentCard[]>([]);
+  const [selectedCard, setSelectedCard] = useState<PaymentCard | null>(null);
+  const [showCardSelection, setShowCardSelection] = useState(false);
+  const [showPaymentConfirmation, setShowPaymentConfirmation] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState<number>(0);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successModalData, setSuccessModalData] = useState({
+    title: '',
+    message: '',
+    orderId: '',
+    cardInfo: ''
+  });
   const params = useLocalSearchParams();
   const router = useRouter();
   const { notification, checkPaymentStatus, hideNotification, showPaymentAlert } =
@@ -55,6 +97,45 @@ export default function PagoScreen() {
     existingOrderId,
     allParams: params,
   });
+
+  // 📱 CARGAR TARJETAS GUARDADAS AL INICIAR
+  useEffect(() => {
+    loadSavedCards();
+  }, []);
+
+  /**
+   * 🃏 FUNCIÓN: loadSavedCards
+   * Cargar tarjetas guardadas del usuario
+   */
+  const loadSavedCards = async () => {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      if (!token) return;
+
+      console.log('🃏 Cargando tarjetas guardadas...');
+      const response = await fetch(createApiUrl('/api/payment-cards'), {
+        method: 'GET',
+        headers: createAuthHeaders(token),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('✅ Tarjetas cargadas:', data.cards?.length || 0);
+        setSavedCards(data.cards || []);
+        
+        // Seleccionar tarjeta por defecto automáticamente
+        const defaultCard = data.cards?.find((card: PaymentCard) => card.isDefault);
+        if (defaultCard) {
+          setSelectedCard(defaultCard);
+          console.log('✅ Tarjeta por defecto seleccionada:', defaultCard.cardNumber);
+        }
+      } else {
+        console.error('❌ Error cargando tarjetas:', response.status);
+      }
+    } catch (error) {
+      console.error('❌ Error cargando tarjetas:', error);
+    }
+  };
 
   // 🚚 DEBUG: Revisar datos de envío específicamente
   console.log('🚚 DEBUG - DATOS DE ENVÍO EN PARÁMETROS:', {
@@ -223,28 +304,199 @@ export default function PagoScreen() {
   };
 
   // 💳 FUNCIÓN: handleCardPayment
-  // Para pago directo con tarjeta (Stripe/Square)
+  // Para pago directo con tarjeta guardada
   const handleCardPayment = async (orderId?: string) => {
     try {
-      setLoading(true);
-      console.log('💳 Procesando pago con tarjeta...');
+      if (savedCards.length === 0) {
+        // No hay tarjetas guardadas, ir a agregar nueva
+        console.log('📋 No hay tarjetas guardadas, redirigiendo a agregar tarjeta...');
+        router.push('/perfil/add-card');
+        return;
+      }
 
-      // Por ahora mostrar alert, luego implementar Stripe
-      Alert.alert(
-        'Pago con Tarjeta',
-        `${orderId ? `Procesando pago para orden #${orderId}` : 'Procesando nuevo pago'}\n\n• Procesamiento seguro con Stripe\n• Aceptamos Visa, Mastercard, American Express\n• Autorización inmediata\n\n¿Continuar?`,
-        [
-          { text: 'Cancelar', style: 'cancel' },
-          {
-            text: 'Continuar',
-            onPress: () => {
-              console.log('🏦 Implementar integración con Stripe aquí');
-              // TODO: Implementar Stripe
-              Alert.alert('Próximamente', 'La integración con Stripe estará disponible pronto.');
-            },
-          },
-        ]
-      );
+      // Mostrar selector de tarjetas si hay varias, o usar la seleccionada
+      if (!selectedCard && savedCards.length > 1) {
+        setShowCardSelection(true);
+        return;
+      }
+
+      const cardToUse = selectedCard || savedCards[0];
+      
+      if (!cardToUse) {
+        Alert.alert('Error', 'No se pudo seleccionar una tarjeta');
+        return;
+      }
+
+      // Calcular el monto total
+      let totalAmount = 0;
+      if (orderId) {
+        // Si ya hay orden, usar el total de los parámetros o calcular
+        totalAmount = parseFloat(params.total as string) || 
+                     ((parseFloat(params.precio as string) || 0) * (parseInt(params.cantidad as string) || 1)) + 50;
+      } else {
+        // Calcular según el tipo de compra
+        const isCartPurchase = params.productoId === 'carrito';
+        if (isCartPurchase && carrito.items) {
+          totalAmount = carrito.items.reduce(
+            (sum: number, item: any) => sum + item.unit_price * item.quantity,
+            0
+          ) + 50; // + shipping
+        } else {
+          const productPrice = parseFloat(params.precio as string) || 0;
+          const productQuantity = parseInt(params.cantidad as string) || 1;
+          const shippingCost = parseFloat(params.shippingCost as string) || 50;
+          totalAmount = (productPrice * productQuantity) + shippingCost;
+        }
+      }
+
+      // Guardar el monto y mostrar modal de confirmación
+      setPaymentAmount(totalAmount);
+      setShowPaymentConfirmation(true);
+
+    } catch (error) {
+      console.error('❌ Error preparando pago con tarjeta:', error);
+      Alert.alert('Error', 'Error preparando el pago con tarjeta');
+    }
+  };
+
+  // 💳 FUNCIÓN: processCardPayment
+  // Procesar el pago después de la confirmación
+  const processCardPayment = async (orderId?: string) => {
+    try {
+      if (savedCards.length === 0) {
+        // No hay tarjetas guardadas, ir a agregar nueva
+        console.log('� No hay tarjetas guardadas, redirigiendo a agregar tarjeta...');
+        router.push('/perfil/add-card');
+        return;
+      }
+
+      // Mostrar selector de tarjetas si hay varias, o usar la seleccionada
+      if (!selectedCard && savedCards.length > 1) {
+        setShowCardSelection(true);
+        return;
+      }
+
+      const cardToUse = selectedCard || savedCards[0];
+      
+      if (!cardToUse) {
+        Alert.alert('Error', 'No se pudo seleccionar una tarjeta');
+        return;
+      }
+
+      setLoading(true);
+      console.log('💳 Procesando pago con tarjeta guardada:', cardToUse.cardNumber);
+
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        Alert.alert('Error', 'Sesión expirada. Por favor inicia sesión nuevamente.');
+        router.push('/auth/login');
+        return;
+      }
+
+      let paymentOrderId = orderId;
+      
+      // Si no hay orderId, necesitamos crear la orden primero
+      if (!paymentOrderId) {
+        console.log('📦 Creando nueva orden para pago con tarjeta...');
+        
+        // Determinar datos de la orden
+        const isCartPurchase = params.productoId === 'carrito';
+        let orderData;
+
+        if (isCartPurchase) {
+          if (!carrito.items || carrito.items.length === 0) {
+            Alert.alert('Error', 'El carrito está vacío');
+            return;
+          }
+
+          orderData = {
+            items: carrito.items.map((item: any) => ({
+              productId: parseInt(item.id) || item.product?.id,
+              quantity: item.quantity,
+              unit_price: item.unit_price,
+            })),
+            totalAmount: carrito.items.reduce(
+              (sum: number, item: any) => sum + item.unit_price * item.quantity,
+              0
+            ) + 50, // + shipping
+            paymentMethod: 'MERCADOPAGO', // Agregar paymentMethod válido
+          };
+        } else {
+          const productPrice = parseFloat(params.precio as string) || 0;
+          const productQuantity = parseInt(params.cantidad as string) || 1;
+          const shippingCost = parseFloat(params.shippingCost as string) || 50;
+          
+          orderData = {
+            items: [{
+              productId: parseInt(params.productoId as string),
+              quantity: productQuantity,
+              unit_price: productPrice,
+            }],
+            totalAmount: (productPrice * productQuantity) + shippingCost,
+            paymentMethod: 'MERCADOPAGO', // Agregar paymentMethod válido
+          };
+        }
+
+        // Crear orden
+        const orderResponse = await fetch(createApiUrl('/api/orders'), {
+          method: 'POST',
+          headers: createAuthHeaders(token),
+          body: JSON.stringify(orderData),
+        });
+
+        const orderResult = await orderResponse.json();
+        
+        if (!orderResponse.ok) {
+          console.error('❌ Error creando orden:', orderResult);
+          Alert.alert('Error', 'No se pudo crear la orden');
+          return;
+        }
+
+        paymentOrderId = orderResult.order.id;
+        console.log('✅ Orden creada para pago con tarjeta:', paymentOrderId);
+
+        // Limpiar carrito si era compra del carrito
+        if (isCartPurchase) {
+          carrito.clearCart();
+        }
+      }
+
+      // Procesar pago con tarjeta guardada
+      const paymentResponse = await fetch(createApiUrl('/api/payments/pay-with-card'), {
+        method: 'POST',
+        headers: createAuthHeaders(token),
+        body: JSON.stringify({
+          orderId: paymentOrderId,
+          cardId: cardToUse.id,
+        }),
+      });
+
+      const paymentResult = await paymentResponse.json();
+      
+      if (paymentResponse.ok && paymentResult.success) {
+        console.log('✅ Pago con tarjeta exitoso');
+        
+        // Mostrar modal de éxito en lugar de Alert
+        setSuccessModalData({
+          title: '¡Pago Exitoso!',
+          message: `Tu pago ha sido procesado correctamente con tu tarjeta ${cardToUse.cardType.toUpperCase()}`,
+          orderId: paymentOrderId?.toString() || '',
+          cardInfo: `${cardToUse.cardType.toUpperCase()} ****${cardToUse.cardNumber.slice(-4)}`
+        });
+        setShowSuccessModal(true);
+        
+      } else {
+        console.error('❌ Error en pago con tarjeta:', paymentResult);
+        Alert.alert(
+          'Pago Rechazado',
+          paymentResult.payment?.statusDetail || 'Tu pago fue rechazado. Intenta con otra tarjeta.',
+          [
+            { text: 'Cambiar Tarjeta', onPress: () => setShowCardSelection(true) },
+            { text: 'Cancelar', style: 'cancel' }
+          ]
+        );
+      }
+      
     } catch (error) {
       console.error('❌ Error en pago con tarjeta:', error);
       Alert.alert('Error', 'Error al procesar el pago con tarjeta');
@@ -843,6 +1095,57 @@ export default function PagoScreen() {
               <View
                 style={[styles.paymentSection, { backgroundColor: isDark ? '#222' : '#f5f5f5' }]}
               >
+                {/* Tarjetas de Crédito/Débito */}
+                <View style={styles.paymentMethodRow}>
+                  <View style={styles.paymentMethodInfo}>
+                    <View style={styles.paymentMethodHeader}>
+                      <Image
+                        source={require('../../assets/images/credit-cards.png')}
+                        style={[
+                          styles.paymentHeaderIcon,
+                          { tintColor: isDark ? '#fff' : '#000' }
+                        ]}
+                      />
+                      <Text style={[styles.paymentMethodName, { color: isDark ? '#fff' : '#000' }]}>
+                        Tarjeta de Crédito/Débito
+                      </Text>
+                    </View>
+                    <Text style={[styles.paymentMethodDesc, { color: isDark ? '#ccc' : '#666' }]}>
+                      {savedCards.length > 0 
+                        ? `${savedCards.length} tarjeta${savedCards.length > 1 ? 's' : ''} guardada${savedCards.length > 1 ? 's' : ''}`
+                        : 'Visa, Mastercard, American Express'
+                      }
+                    </Text>
+                    <Text style={[styles.paymentMethodFeature, { color: '#4CAF50' }]}>
+                      ✓ Pago directo y seguro
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[
+                      styles.paymentIconButton,
+                      {
+                        backgroundColor: 'rgba(76, 175, 80, 0.1)',
+                        borderWidth: 1,
+                        borderColor: '#4CAF50',
+                      },
+                    ]}
+                    onPress={() => handleCardPayment()}
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <ActivityIndicator size={24} color="#4CAF50" />
+                    ) : (
+                      <Image
+                        source={require('../../assets/images/credit-cards.png')}
+                        style={[
+                          styles.paymentButtonIcon,
+                          { tintColor: '#4CAF50' }
+                        ]}
+                      />
+                    )}
+                  </TouchableOpacity>
+                </View>
+
                 {/* MercadoPago */}
                 <View style={styles.paymentMethodRow}>
                   <View style={styles.paymentMethodInfo}>
@@ -1047,6 +1350,322 @@ export default function PagoScreen() {
             </>
           )}
         </ScrollView>
+
+        {/* Modal de selección de tarjetas */}
+        {showCardSelection && (
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { backgroundColor: isDark ? '#222' : '#fff' }]}>
+              <Text style={[styles.modalTitle, { color: isDark ? '#fff' : '#000' }]}>
+                Selecciona tu tarjeta
+              </Text>
+              
+              <ScrollView style={styles.cardsContainer}>
+                {savedCards.map((card: PaymentCard) => (
+                  <TouchableOpacity
+                    key={card.id}
+                    style={[
+                      styles.cardItem,
+                      {
+                        backgroundColor: selectedCard?.id === card.id 
+                          ? (isDark ? 'rgba(76, 175, 80, 0.2)' : 'rgba(76, 175, 80, 0.1)')
+                          : (isDark ? '#333' : '#f5f5f5'),
+                        borderColor: selectedCard?.id === card.id ? '#4CAF50' : (isDark ? '#444' : '#ddd'),
+                      }
+                    ]}
+                    onPress={() => setSelectedCard(card)}
+                  >
+                    <View style={styles.cardRow}>
+                      <Image
+                        source={getCardIcon(card.cardType)}
+                        style={[
+                          styles.cardIcon,
+                          needsTintColor(card.cardType) 
+                            ? { tintColor: isDark ? '#fff' : '#000' }
+                            : {}
+                        ]}
+                      />
+                      <View style={styles.cardInfo}>
+                        <Text style={[styles.cardNumber, { color: isDark ? '#fff' : '#000' }]}>
+                          {card.cardNumber}
+                        </Text>
+                        <Text style={[styles.cardHolder, { color: isDark ? '#ccc' : '#666' }]}>
+                          {card.cardHolder}
+                        </Text>
+                        <Text style={[styles.cardExpiry, { color: isDark ? '#ccc' : '#666' }]}>
+                          Exp: {card.expiryDate}
+                        </Text>
+                      </View>
+                      {card.isDefault && (
+                        <View style={styles.defaultBadge}>
+                          <Text style={styles.defaultText}>Principal</Text>
+                        </View>
+                      )}
+                      {selectedCard?.id === card.id && (
+                        <View style={styles.selectedIndicator}>
+                          <MaterialIcons name="check-circle" size={24} color="#4CAF50" />
+                        </View>
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={[
+                    styles.modalButton,
+                    styles.addCardButton,
+                    { backgroundColor: isDark ? '#333' : '#f5f5f5' }
+                  ]}
+                  onPress={() => {
+                    setShowCardSelection(false);
+                    router.push('/perfil/add-card');
+                  }}
+                >
+                  <Text style={[styles.modalButtonText, { color: isDark ? '#fff' : '#000' }]}>
+                    + Agregar Nueva Tarjeta
+                  </Text>
+                </TouchableOpacity>
+
+                <View style={styles.modalButtonRow}>
+                  <TouchableOpacity
+                    style={[
+                      styles.modalButton,
+                      styles.cancelButton,
+                      { borderColor: isDark ? '#fff' : '#000' }
+                    ]}
+                    onPress={() => setShowCardSelection(false)}
+                  >
+                    <Text style={[styles.modalButtonText, { color: isDark ? '#fff' : '#000' }]}>
+                      Cancelar
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.modalButton,
+                      styles.confirmButton,
+                      { opacity: selectedCard ? 1 : 0.5 }
+                    ]}
+                    onPress={() => {
+                      if (selectedCard) {
+                        setShowCardSelection(false);
+                        handleCardPayment();
+                      }
+                    }}
+                    disabled={!selectedCard}
+                  >
+                    <Text style={styles.confirmButtonText}>
+                      Pagar con esta tarjeta
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* Modal de confirmación de pago */}
+        {showPaymentConfirmation && selectedCard && (
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { backgroundColor: isDark ? '#222' : '#fff' }]}>
+              <Text style={[styles.modalTitle, { color: isDark ? '#fff' : '#000' }]}>
+                Confirmar Pago
+              </Text>
+              
+              <View style={styles.confirmationContainer}>
+                {/* Información de la tarjeta */}
+                <View style={[styles.confirmationCard, { backgroundColor: isDark ? '#333' : '#f5f5f5' }]}>
+                  <View style={styles.cardRow}>
+                    <Image
+                      source={getCardIcon(selectedCard.cardType)}
+                      style={[
+                        styles.cardIcon,
+                        needsTintColor(selectedCard.cardType) 
+                          ? { tintColor: isDark ? '#fff' : '#000' }
+                          : {}
+                      ]}
+                    />
+                    <View style={styles.cardInfo}>
+                      <Text style={[styles.cardNumber, { color: isDark ? '#fff' : '#000' }]}>
+                        {selectedCard.cardNumber}
+                      </Text>
+                      <Text style={[styles.cardHolder, { color: isDark ? '#ccc' : '#666' }]}>
+                        {selectedCard.cardHolder}
+                      </Text>
+                    </View>
+                    {selectedCard.isDefault && (
+                      <View style={styles.defaultBadge}>
+                        <Text style={styles.defaultText}>Principal</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+
+                {/* Detalles del pago */}
+                <View style={[styles.paymentDetails, { backgroundColor: isDark ? '#333' : '#f9f9f9' }]}>
+                  <Text style={[styles.paymentDetailsTitle, { color: isDark ? '#fff' : '#000' }]}>
+                    Detalles del Pago
+                  </Text>
+                  
+                  <View style={styles.paymentDetailRow}>
+                    <Text style={[styles.paymentDetailLabel, { color: isDark ? '#ccc' : '#666' }]}>
+                      Método de Pago:
+                    </Text>
+                    <Text style={[styles.paymentDetailValue, { color: isDark ? '#fff' : '#000' }]}>
+                      {selectedCard.cardType.toUpperCase()} ****{selectedCard.cardNumber.slice(-4)}
+                    </Text>
+                  </View>
+
+                  <View style={styles.paymentDetailRow}>
+                    <Text style={[styles.paymentDetailLabel, { color: isDark ? '#ccc' : '#666' }]}>
+                      Titular:
+                    </Text>
+                    <Text style={[styles.paymentDetailValue, { color: isDark ? '#fff' : '#000' }]}>
+                      {selectedCard.cardHolder}
+                    </Text>
+                  </View>
+
+                  <View style={[styles.paymentDetailRow, styles.totalRow]}>
+                    <Text style={[styles.paymentDetailLabel, styles.totalLabel, { color: isDark ? '#fff' : '#000' }]}>
+                      Total a Pagar:
+                    </Text>
+                    <Text style={[styles.paymentDetailValue, styles.totalValue]}>
+                      ${paymentAmount.toFixed(2)} MXN
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Información de seguridad */}
+                <View style={styles.securityNotice}>
+                  <MaterialIcons name="security" size={16} color="#4CAF50" />
+                  <Text style={[styles.securityNoticeText, { color: isDark ? '#ccc' : '#666' }]}>
+                    Tu pago está protegido con encriptación SSL
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.modalActions}>
+                <View style={styles.modalButtonRow}>
+                  <TouchableOpacity
+                    style={[
+                      styles.modalButton,
+                      styles.cancelButton,
+                      { borderColor: isDark ? '#fff' : '#000' }
+                    ]}
+                    onPress={() => {
+                      setShowPaymentConfirmation(false);
+                      setPaymentAmount(0);
+                    }}
+                  >
+                    <Text style={[styles.modalButtonText, { color: isDark ? '#fff' : '#000' }]}>
+                      Cancelar
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.modalButton,
+                      styles.confirmButton,
+                      { opacity: loading ? 0.7 : 1 }
+                    ]}
+                    onPress={() => {
+                      setShowPaymentConfirmation(false);
+                      processCardPayment();
+                    }}
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <ActivityIndicator size={20} color="#fff" />
+                    ) : (
+                      <Text style={styles.confirmButtonText}>
+                        Confirmar Pago
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* Modal de éxito de pago */}
+        {showSuccessModal && (
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { backgroundColor: isDark ? '#222' : '#fff' }]}>
+              {/* Icono de éxito */}
+              <View style={styles.successIconContainer}>
+                <View style={styles.successIcon}>
+                  <MaterialIcons name="check" size={48} color="#fff" />
+                </View>
+              </View>
+
+              {/* Título */}
+              <Text style={[styles.successTitle, { color: isDark ? '#fff' : '#000' }]}>
+                {successModalData.title}
+              </Text>
+
+              {/* Mensaje */}
+              <Text style={[styles.successMessage, { color: isDark ? '#ccc' : '#666' }]}>
+                {successModalData.message}
+              </Text>
+
+              {/* Información de la tarjeta */}
+              <View style={[styles.successCardInfo, { backgroundColor: isDark ? '#333' : '#f5f5f5' }]}>
+                <MaterialIcons name="credit-card" size={24} color="#4CAF50" />
+                <Text style={[styles.successCardText, { color: isDark ? '#fff' : '#000' }]}>
+                  {successModalData.cardInfo}
+                </Text>
+              </View>
+
+              {/* Información del pedido */}
+              {successModalData.orderId && (
+                <View style={[styles.successOrderInfo, { backgroundColor: isDark ? '#1a1a1a' : '#f9f9f9' }]}>
+                  <Text style={[styles.successOrderLabel, { color: isDark ? '#ccc' : '#666' }]}>
+                    Número de Pedido:
+                  </Text>
+                  <Text style={[styles.successOrderNumber, { color: isDark ? '#fff' : '#000' }]}>
+                    #{successModalData.orderId}
+                  </Text>
+                </View>
+              )}
+
+              {/* Botones */}
+              <View style={styles.successModalActions}>
+                <TouchableOpacity
+                  style={[
+                    styles.modalButton,
+                    styles.successSecondaryButton,
+                    { borderColor: isDark ? '#444' : '#ddd' }
+                  ]}
+                  onPress={() => {
+                    setShowSuccessModal(false);
+                    // Redirigir al listado de pedidos
+                    router.push('/pedidos/mis-pedidos');
+                  }}
+                >
+                  <Text style={[styles.modalButtonText, { color: isDark ? '#fff' : '#000' }]}>
+                    Ver Mis Pedidos
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.successPrimaryButton]}
+                  onPress={() => {
+                    setShowSuccessModal(false);
+                    // Redirigir a la tienda
+                    router.push('/(tabs)/tienda' as any);
+                  }}
+                >
+                  <MaterialIcons name="shopping-cart" size={20} color="#fff" style={{ marginRight: 8 }} />
+                  <Text style={styles.successPrimaryButtonText}>
+                    Seguir Comprando
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        )}
       </View>
     </>
   );
@@ -1223,5 +1842,262 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 16,
+  },
+  // Estilos para modal de tarjetas
+  modalOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  modalContent: {
+    width: '90%',
+    maxWidth: 400,
+    maxHeight: '80%',
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  cardsContainer: {
+    maxHeight: 300,
+    marginBottom: 20,
+  },
+  cardItem: {
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 2,
+  },
+  cardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  cardIcon: {
+    width: 32,
+    height: 32,
+    marginRight: 12,
+    resizeMode: 'contain',
+  },
+  cardInfo: {
+    flex: 1,
+  },
+  cardNumber: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  cardHolder: {
+    fontSize: 14,
+    marginBottom: 2,
+  },
+  cardExpiry: {
+    fontSize: 12,
+  },
+  defaultBadge: {
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginLeft: 8,
+  },
+  defaultText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  selectedIndicator: {
+    marginLeft: 8,
+  },
+  modalActions: {
+    gap: 12,
+  },
+  modalButtonRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    flex: 1,
+  },
+  addCardButton: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  cancelButton: {
+    borderWidth: 1,
+  },
+  confirmButton: {
+    backgroundColor: '#4CAF50',
+  },
+  modalButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  confirmButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  // Estilos para modal de confirmación de pago
+  confirmationContainer: {
+    marginBottom: 20,
+  },
+  confirmationCard: {
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(76, 175, 80, 0.3)',
+  },
+  paymentDetails: {
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  paymentDetailsTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  paymentDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 0, 0, 0.1)',
+  },
+  totalRow: {
+    borderBottomWidth: 0,
+    paddingTop: 12,
+    marginTop: 8,
+    borderTopWidth: 2,
+    borderTopColor: '#4CAF50',
+  },
+  paymentDetailLabel: {
+    fontSize: 14,
+    flex: 1,
+  },
+  totalLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  paymentDetailValue: {
+    fontSize: 14,
+    fontWeight: '500',
+    textAlign: 'right',
+    flex: 1,
+  },
+  totalValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#4CAF50',
+  },
+  securityNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+  },
+  securityNoticeText: {
+    fontSize: 12,
+    marginLeft: 6,
+    textAlign: 'center',
+  },
+  // Estilos para modal de éxito
+  successIconContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  successIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#4CAF50',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#4CAF50',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  successTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  successMessage: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 24,
+  },
+  successCardInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  successCardText: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 12,
+  },
+  successOrderInfo: {
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 24,
+    alignItems: 'center',
+  },
+  successOrderLabel: {
+    fontSize: 14,
+    marginBottom: 4,
+  },
+  successOrderNumber: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  successModalActions: {
+    gap: 12,
+  },
+  successSecondaryButton: {
+    borderWidth: 1,
+    backgroundColor: 'transparent',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  successPrimaryButton: {
+    backgroundColor: '#4CAF50',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  successPrimaryButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

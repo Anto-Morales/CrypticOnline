@@ -26,7 +26,7 @@ const apiRequest = async (url: string, options: RequestInit = {}) => {
       'http://localhost:3000';
 
     // 🚨 FALLBACK URL SI LAS VARIABLES NO FUNCIONAN (ACTUALIZADA)
-    const FALLBACK_NGROK_URL = 'https://3660d8b9eaa9.ngrok-free.app';
+    const FALLBACK_NGROK_URL = 'https://d6fca11dd7c8.ngrok-free.app';
 
     // 🌐 DETECCIÓN AUTOMÁTICA DE ENTORNO
     if (!process.env.EXPO_PUBLIC_NGROK_URL && !process.env.EXPO_PUBLIC_API_URL) {

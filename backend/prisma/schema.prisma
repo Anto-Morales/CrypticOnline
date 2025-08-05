@@ -42,6 +42,7 @@ model User {
   orders          Order[]   @relation(name: "UserOrders")
   products        Product[] @relation(name: "UserProducts")
   notifications   Notification[]
+  paymentCards    PaymentCard[]
   createdAt       DateTime  @default(now())
 }
 
@@ -107,6 +108,23 @@ model Payment {
   amount       Float
   createdAt    DateTime @default(now())
   order        Order    @relation(fields: [orderId], references: [id])
+}
+
+model PaymentCard {
+  id           Int      @id @default(autoincrement())
+  userId       Int
+  cardNumber   String   // Últimos 4 dígitos encriptados
+  cardHolder   String   // Nombre del titular
+  expiryDate   String   // MM/YY
+  cardType     String   // visa, mastercard, amex
+  isDefault    Boolean  @default(false)
+  isActive     Boolean  @default(true)
+  tokenId      String?  // Token del proveedor de pago (MercadoPago, Stripe, etc.)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
 }
 
 model Notification {

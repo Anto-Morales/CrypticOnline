@@ -127,7 +127,7 @@ export const usePaymentReturnHandler = () => {
   // 🎉 FUNCIÓN: showPaymentSuccessAlert
   const showPaymentSuccessAlert = (orderId: number) => {
     Alert.alert(
-      '✅ ¡Pago Confirmado!',
+      '¡Pago Confirmado!',
       `Tu pago ha sido procesado exitosamente. El pedido #${orderId} está en preparación.`,
       [
         {

@@ -3,68 +3,96 @@ import prisma from '../prisma/db.js';
 // Crear pedido con varios productos
 export const createOrder = async (req, res) => {
   try {
-    const { userId, items, paymentMethod } = req.body;
-
-    if (!items || !Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ error: 'Debe enviar productos para el pedido.' });
+    // Extraer userId de manera robusta (compatibilidad con ambos middlewares)
+    const userId = req.user?.userId || req.user?.id || req.body.userId;
+    
+    console.log('📦 Creando orden para usuario:', userId);
+    console.log('📦 Datos recibidos:', JSON.stringify(req.body, null, 2));
+    
+    if (!userId) {
+      return res.status(401).json({ 
+        success: false,
+        error: 'Token de usuario inválido' 
+      });
     }
 
-    // Validar y calcular total
-    let total = 0;
+    const { items, paymentMethod, totalAmount } = req.body;
+
+    // Usar items si existe, sino crear desde los datos del request
+    let orderItems = items;
+    let total = totalAmount;
+
+    if (!orderItems || !Array.isArray(orderItems) || orderItems.length === 0) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'Debe enviar productos para el pedido.' 
+      });
+    }
+
+    if (!total || total <= 0) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'Total de la orden debe ser mayor a 0' 
+      });
+    }
+
+    // Validar y preparar datos de items
     const orderItemsData = [];
 
-    for (const item of items) {
+    for (const item of orderItems) {
       const product = await prisma.product.findUnique({
         where: { id: item.productId },
         include: { discounts: true },
       });
 
       if (!product) {
-        return res.status(404).json({ error: `Producto ${item.productId} no encontrado` });
+        return res.status(404).json({ 
+          success: false,
+          error: `Producto ${item.productId} no encontrado` 
+        });
       }
 
       if (product.stock < item.quantity) {
-        return res.status(400).json({ error: `Stock insuficiente para ${product.name}` });
+        return res.status(400).json({ 
+          success: false,
+          error: `Stock insuficiente para ${product.name}` 
+        });
       }
 
-      // Aplicar descuento si hay
-      const now = new Date();
-      const activeDiscount = product.discounts.find((d) => now >= d.startDate && now <= d.endDate);
-      let finalPrice = product.price;
-
-      if (activeDiscount) {
-        finalPrice = finalPrice * (1 - activeDiscount.percentage / 100);
-      }
-
-      total += finalPrice * item.quantity;
+      // Usar el precio que viene del frontend (ya incluye descuentos y cálculos)
+      const itemPrice = item.unit_price || product.price;
 
       orderItemsData.push({
         productId: item.productId,
         quantity: item.quantity,
-        price: finalPrice,
+        price: itemPrice,
       });
     }
 
     // Crear orden y decrementar stock en la misma transacción
     const newOrder = await prisma.$transaction(async (tx) => {
-      // Crear orden
+      // Crear orden con paymentMethod válido
       const order = await tx.order.create({
         data: {
-          userId,
+          userId: userId,
           status: 'PENDING',
-          total,
-          paymentMethod,
+          total: total,
+          paymentMethod: paymentMethod || 'MERCADOPAGO', // Usar valor válido del enum
           orderItems: {
             create: orderItemsData,
           },
         },
         include: {
-          orderItems: true,
+          orderItems: {
+            include: {
+              product: true
+            }
+          },
         },
       });
 
       // Actualizar stock productos
-      for (const item of items) {
+      for (const item of orderItems) {
         await tx.product.update({
           where: { id: item.productId },
           data: {
@@ -76,10 +104,24 @@ export const createOrder = async (req, res) => {
       return order;
     });
 
-    res.status(201).json(newOrder);
+    console.log('✅ Orden creada exitosamente:', newOrder.id);
+
+    res.status(201).json({
+      success: true,
+      order: {
+        id: newOrder.id,
+        total: newOrder.total,
+        status: newOrder.status,
+        items: newOrder.orderItems
+      }
+    });
   } catch (error) {
-    console.error('Error al crear orden:', error);
-    res.status(500).json({ error: 'Error al crear orden' });
+    console.error('❌ Error al crear orden:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Error al crear orden',
+      details: error.message
+    });
   }
 };
 
