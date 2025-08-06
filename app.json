@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "CRYPTIC-v2.8.3",
+    "name": "CRYPTIC-v3.8.3",
     "slug": "CRYPTIC",
-    "version": "2.8.3",
+    "version": "3.8.3",
     "orientation": "portrait",
     "icon": "./assets/images/Logo.png",
     "scheme": "cryptic",

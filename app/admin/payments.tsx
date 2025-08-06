@@ -1,31 +1,82 @@
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useState } from 'react';
 import {
-    Dimensions,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    useColorScheme,
-    View,
+  Alert,
+  Dimensions,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useColorScheme,
+  View,
 } from 'react-native';
 
 const { width } = Dimensions.get('window');
 const isLargeScreen = width > 768;
 
+// 🔧 Configuración de API (igual que en otros archivos)
+const apiRequest = async (
+  endpoint: string,
+  options: {
+    method?: string;
+    headers?: Record<string, string>;
+    body?: string;
+  } = {}
+) => {
+  const { method = 'GET', headers = {}, body } = options;
+
+  let baseUrl =
+    process.env.EXPO_PUBLIC_NGROK_URL || process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+
+  const FALLBACK_NGROK_URL = 'https://aca21624c99b.ngrok-free.app';
+
+  if (!process.env.EXPO_PUBLIC_NGROK_URL && !process.env.EXPO_PUBLIC_API_URL) {
+    console.log('⚠️ Variables de entorno no disponibles en admin payments, usando fallback');
+    baseUrl = FALLBACK_NGROK_URL;
+  }
+
+  const url = `${baseUrl}${endpoint}`;
+  console.log('🔗 Admin Payments - URL Base detectada:', baseUrl);
+
+  const defaultHeaders = {
+    'Content-Type': 'application/json',
+    'ngrok-skip-browser-warning': 'true',
+    ...headers,
+  };
+
+  const config: RequestInit = {
+    method,
+    headers: defaultHeaders,
+  };
+
+  if (body && method !== 'GET') {
+    config.body = body;
+  }
+
+  const response = await fetch(url, config);
+  const data = await response.json();
+
+  return { response, data };
+};
+
 interface Payment {
   id: number;
   orderId: number;
   amount: number;
-  method: string;
+  method: 'MERCADOPAGO' | 'CARD' | 'TRANSFER' | 'PAYPAL' | 'CRYPTO'; // Solo métodos realmente implementados
   status: 'PENDING' | 'COMPLETED' | 'FAILED' | 'REFUNDED';
   transactionId?: string;
-  user: {
-    nombres: string;
-    apellidoPaterno: string;
-    email: string;
+  preferenceId?: string;
+  order: {
+    id: number;
+    user: {
+      nombres: string;
+      apellidoPaterno: string;
+      email: string;
+    };
   };
   createdAt: string;
   processedAt?: string;
@@ -50,7 +101,7 @@ export default function AdminPayments() {
     todayRevenue: 0,
     todayTransactions: 0,
     methodStats: [],
-    recentPayments: []
+    recentPayments: [],
   });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -78,129 +129,85 @@ export default function AdminPayments() {
 
   const loadPayments = async () => {
     try {
-      // Mock data hasta que creemos la API real
-      const mockPayments: Payment[] = [
+      setLoading(true);
+
+      // 🔐 Obtener token de administrador
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        Alert.alert('Error', 'No hay token de autenticación');
+        return;
+      }
+
+      console.log('🔍 Obteniendo datos reales de pagos...');
+
+      // 📊 Obtener estadísticas de pagos
+      const { response: statsResponse, data: statsData } = await apiRequest(
+        '/api/admin/payments/stats',
         {
-          id: 1,
-          orderId: 1,
-          amount: 640.99,
-          method: 'MercadoPago',
-          status: 'COMPLETED',
-          transactionId: 'MP_001_ABC123',
-          user: {
-            nombres: 'Angel Valentin',
-            apellidoPaterno: 'Flores',
-            email: 'an@c.com'
-          },
-          createdAt: '2025-01-28T10:30:00Z',
-          processedAt: '2025-01-28T10:31:00Z'
-        },
-        {
-          id: 2,
-          orderId: 2,
-          amount: 1349.50,
-          method: 'MercadoPago',
-          status: 'PENDING',
-          transactionId: 'MP_002_DEF456',
-          user: {
-            nombres: 'María José',
-            apellidoPaterno: 'García',
-            email: 'maria@example.com'
-          },
-          createdAt: '2025-01-28T09:15:00Z'
-        },
-        {
-          id: 3,
-          orderId: 3,
-          amount: 1250.00,
-          method: 'PayPal',
-          status: 'COMPLETED',
-          transactionId: 'PP_GHI789',
-          user: {
-            nombres: 'Carlos',
-            apellidoPaterno: 'López',
-            email: 'carlos@example.com'
-          },
-          createdAt: '2025-01-27T14:20:00Z',
-          processedAt: '2025-01-27T14:22:00Z'
-        },
-        {
-          id: 4,
-          orderId: 4,
-          amount: 850.00,
-          method: 'MercadoPago',
-          status: 'COMPLETED',
-          transactionId: 'MP_003_JKL012',
-          user: {
-            nombres: 'Ana',
-            apellidoPaterno: 'Martínez',
-            email: 'ana@example.com'
-          },
-          createdAt: '2025-01-26T11:10:00Z',
-          processedAt: '2025-01-26T11:12:00Z'
-        },
-        {
-          id: 5,
-          orderId: 5,
-          amount: 590.99,
-          method: 'Transferencia',
-          status: 'FAILED',
-          user: {
-            nombres: 'Luis',
-            apellidoPaterno: 'Rodríguez',
-            email: 'luis@example.com'
-          },
-          createdAt: '2025-01-25T16:45:00Z'
+          method: 'GET',
+          headers: { Authorization: `Bearer ${token}` },
         }
-      ];
-
-      setPayments(mockPayments);
-
-      // Calcular estadísticas
-      const totalRevenue = mockPayments
-        .filter(p => p.status === 'COMPLETED')
-        .reduce((sum, p) => sum + p.amount, 0);
-      
-      const totalTransactions = mockPayments.filter(p => p.status === 'COMPLETED').length;
-      
-      const today = new Date().toISOString().split('T')[0];
-      const todayPayments = mockPayments.filter(p => 
-        p.createdAt.startsWith(today) && p.status === 'COMPLETED'
       );
-      const todayRevenue = todayPayments.reduce((sum, p) => sum + p.amount, 0);
-      
-      // Estadísticas por método
-      const methodCounts: { [key: string]: { count: number; amount: number } } = {};
-      mockPayments.filter(p => p.status === 'COMPLETED').forEach(payment => {
-        if (!methodCounts[payment.method]) {
-          methodCounts[payment.method] = { count: 0, amount: 0 };
+
+      // 📋 Obtener lista de pagos
+      const { response: paymentsResponse, data: paymentsData } = await apiRequest(
+        '/api/admin/payments',
+        {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${token}` },
         }
-        methodCounts[payment.method].count++;
-        methodCounts[payment.method].amount += payment.amount;
-      });
+      );
 
-      const methodStats = Object.entries(methodCounts).map(([method, data]) => ({
-        method,
-        count: data.count,
-        amount: data.amount,
-        percentage: (data.count / totalTransactions) * 100
-      }));
+      if (statsResponse.ok && paymentsResponse.ok) {
+        console.log('✅ Datos de pagos obtenidos exitosamente');
+        console.log('📊 Estadísticas:', statsData);
+        console.log('📋 Pagos:', paymentsData.payments?.length || 0, 'pagos encontrados');
 
-      setStats({
-        totalRevenue,
-        totalTransactions,
-        todayRevenue,
-        todayTransactions: todayPayments.length,
-        methodStats,
-        recentPayments: mockPayments.slice(0, 5)
-      });
+        // Establecer pagos
+        setPayments(paymentsData.payments || []);
 
+        // Establecer estadísticas
+        setStats({
+          totalRevenue: statsData.totalRevenue || 0,
+          totalTransactions: statsData.totalTransactions || 0,
+          todayRevenue: statsData.todayRevenue || 0,
+          todayTransactions: statsData.todayTransactions || 0,
+          methodStats: statsData.methodStats || [],
+          recentPayments: paymentsData.payments?.slice(0, 5) || [],
+        });
+      } else {
+        console.error('❌ Error en respuesta de API');
+        console.error('Stats response:', statsResponse.status, statsData);
+        console.error('Payments response:', paymentsResponse.status, paymentsData);
+
+        // Si hay error, usar datos de respaldo pero mostrar advertencia
+        console.log('🔄 Usando datos de demostración debido a error en API');
+        loadFallbackData();
+      }
     } catch (error) {
-      console.error('Error cargando pagos:', error);
+      console.error('❌ Error cargando datos de pagos:', error);
+      console.log('🔄 Usando datos de demostración debido a error de conexión');
+      loadFallbackData();
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
+  };
+
+  // 🔄 Función para mostrar mensaje cuando no hay datos reales
+  const loadFallbackData = () => {
+    console.log('⚠️ No se pudieron obtener datos reales de la BD');
+
+    // En lugar de datos ficticios, mostrar arrays vacíos
+    setPayments([]);
+    setStats({
+      totalRevenue: 0,
+      totalTransactions: 0,
+      todayRevenue: 0,
+      todayTransactions: 0,
+      methodStats: [],
+      recentPayments: [],
+    });
   };
 
   const onRefresh = () => {
@@ -208,45 +215,82 @@ export default function AdminPayments() {
     loadPayments();
   };
 
+  const getMethodDisplayName = (method: string) => {
+    switch (method.toUpperCase()) {
+      case 'MERCADOPAGO':
+        return 'MercadoPago';
+      case 'CARD':
+        return 'Tarjeta';
+      case 'TRANSFER':
+        return 'Transferencia';
+      case 'PAYPAL':
+        return 'PayPal';
+      case 'CRYPTO':
+        return 'Criptomonedas';
+      // Solo métodos realmente implementados
+      default:
+        return method;
+    }
+  };
+
   const getStatusColor = (status: Payment['status']) => {
     switch (status) {
-      case 'COMPLETED': return themeColors.success;
-      case 'PENDING': return themeColors.warning;
-      case 'FAILED': return themeColors.danger;
-      case 'REFUNDED': return themeColors.info;
-      default: return themeColors.subText;
+      case 'COMPLETED':
+        return themeColors.success;
+      case 'PENDING':
+        return themeColors.warning;
+      case 'FAILED':
+        return themeColors.danger;
+      case 'REFUNDED':
+        return themeColors.info;
+      default:
+        return themeColors.subText;
     }
   };
 
   const getStatusIcon = (status: Payment['status']) => {
     switch (status) {
-      case 'COMPLETED': return 'checkmark-circle-outline';
-      case 'PENDING': return 'time-outline';
-      case 'FAILED': return 'close-circle-outline';
-      case 'REFUNDED': return 'return-down-back-outline';
-      default: return 'help-outline';
+      case 'COMPLETED':
+        return 'checkmark-circle-outline';
+      case 'PENDING':
+        return 'time-outline';
+      case 'FAILED':
+        return 'close-circle-outline';
+      case 'REFUNDED':
+        return 'return-down-back-outline';
+      default:
+        return 'help-outline';
     }
   };
 
   const getMethodIcon = (method: string) => {
-    switch (method.toLowerCase()) {
-      case 'mercadopago': return 'card-outline';
-      case 'paypal': return 'logo-paypal';
-      case 'transferencia': return 'swap-horizontal-outline';
-      default: return 'card-outline';
+    switch (method.toUpperCase()) {
+      case 'MERCADOPAGO':
+        return 'card-outline';
+      case 'CARD':
+        return 'credit-card-outline';
+      case 'TRANSFER':
+        return 'swap-horizontal-outline';
+      case 'PAYPAL':
+        return 'logo-paypal';
+      case 'CRYPTO':
+        return 'logo-bitcoin';
+      // Solo iconos para métodos implementados
+      default:
+        return 'card-outline';
     }
   };
 
-  const filteredPayments = payments.filter(payment => {
-    const matchesSearch = 
-      payment.user.nombres.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      payment.user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+  const filteredPayments = payments.filter((payment) => {
+    const matchesSearch =
+      payment.order.user.nombres.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      payment.order.user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
       payment.transactionId?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       payment.orderId.toString().includes(searchQuery);
-    
+
     const matchesStatus = statusFilter === 'ALL' || payment.status === statusFilter;
     const matchesMethod = methodFilter === 'ALL' || payment.method === methodFilter;
-    
+
     return matchesSearch && matchesStatus && matchesMethod;
   });
 
@@ -267,82 +311,171 @@ export default function AdminPayments() {
     </View>
   );
 
-  const PaymentCard = ({ payment }: { payment: Payment }) => (
-    <View style={[styles.paymentCard, { backgroundColor: themeColors.cardBg }]}>
-      <View style={styles.paymentHeader}>
-        <View>
-          <Text style={[styles.paymentId, { color: themeColors.textColor }]}>
-            Pago #{payment.id} - Orden #{payment.orderId}
-          </Text>
-          <Text style={[styles.paymentUser, { color: themeColors.subText }]}>
-            {payment.user.nombres} {payment.user.apellidoPaterno}
-          </Text>
-          <Text style={[styles.paymentEmail, { color: themeColors.subText }]}>
-            {payment.user.email}
-          </Text>
-        </View>
-        <View style={styles.paymentMeta}>
-          <Text style={[styles.paymentAmount, { color: themeColors.success }]}>
-            ${payment.amount.toFixed(2)}
-          </Text>
-          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(payment.status) }]}>
-            <Ionicons name={getStatusIcon(payment.status) as any} size={16} color="#fff" />
-            <Text style={styles.statusText}>{payment.status}</Text>
+  const PaymentCard = ({ payment }: { payment: Payment }) => {
+    const handleUpdateStatus = async (newStatus: string) => {
+      try {
+        const token = await AsyncStorage.getItem('token');
+        if (!token) {
+          Alert.alert('Error', 'No hay token de autenticación');
+          return;
+        }
+
+        console.log(`🔄 Actualizando pago ${payment.id} a estado ${newStatus}...`);
+
+        const { response, data } = await apiRequest(`/api/admin/payments/${payment.id}/status`, {
+          method: 'PUT',
+          headers: { Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ status: newStatus }),
+        });
+
+        if (response.ok) {
+          console.log('✅ Estado actualizado exitosamente');
+          Alert.alert('Éxito', `Pago actualizado a ${newStatus}`);
+          loadPayments(); // Recargar datos
+        } else {
+          console.error('❌ Error actualizando estado:', data);
+          Alert.alert('Error', data.message || 'Error actualizando pago');
+        }
+      } catch (error) {
+        console.error('❌ Error:', error);
+        Alert.alert('Error', 'Error de conexión');
+      }
+    };
+
+    return (
+      <View style={[styles.paymentCard, { backgroundColor: themeColors.cardBg }]}>
+        <View style={styles.paymentHeader}>
+          <View>
+            <Text style={[styles.paymentId, { color: themeColors.textColor }]}>
+              Pago #{payment.id} - Orden #{payment.orderId}
+            </Text>
+            <Text style={[styles.paymentUser, { color: themeColors.subText }]}>
+              {payment.order.user.nombres} {payment.order.user.apellidoPaterno}
+            </Text>
+            <Text style={[styles.paymentEmail, { color: themeColors.subText }]}>
+              {payment.order.user.email}
+            </Text>
+          </View>
+          <View style={styles.paymentMeta}>
+            <Text style={[styles.paymentAmount, { color: themeColors.success }]}>
+              ${payment.amount.toFixed(2)}
+            </Text>
+            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(payment.status) }]}>
+              <Ionicons name={getStatusIcon(payment.status) as any} size={16} color="#fff" />
+              <Text style={styles.statusText}>{payment.status}</Text>
+            </View>
           </View>
         </View>
-      </View>
-      
-      <View style={styles.paymentDetails}>
-        <View style={styles.paymentMethod}>
-          <Ionicons name={getMethodIcon(payment.method) as any} size={20} color={themeColors.accent} />
-          <Text style={[styles.methodText, { color: themeColors.textColor }]}>
-            {payment.method}
-          </Text>
+
+        <View style={styles.paymentDetails}>
+          <View style={styles.paymentMethod}>
+            <Ionicons
+              name={getMethodIcon(payment.method) as any}
+              size={20}
+              color={themeColors.accent}
+            />
+            <Text style={[styles.methodText, { color: themeColors.textColor }]}>
+              {getMethodDisplayName(payment.method)}
+            </Text>
+          </View>
+          {payment.transactionId && (
+            <Text style={[styles.transactionId, { color: themeColors.subText }]}>
+              ID: {payment.transactionId}
+            </Text>
+          )}
         </View>
-        {payment.transactionId && (
-          <Text style={[styles.transactionId, { color: themeColors.subText }]}>
-            ID: {payment.transactionId}
-          </Text>
+
+        {/* Botones de acción para admin */}
+        {payment.status === 'PENDING' && (
+          <View style={styles.actionButtons}>
+            <TouchableOpacity
+              style={[styles.actionButton, { backgroundColor: themeColors.success }]}
+              onPress={() => {
+                Alert.alert(
+                  'Confirmar Pago',
+                  `¿Estás seguro de marcar este pago como completado?`,
+                  [
+                    { text: 'Cancelar', style: 'cancel' },
+                    { text: 'Confirmar', onPress: () => handleUpdateStatus('COMPLETED') },
+                  ]
+                );
+              }}
+            >
+              <Ionicons name="checkmark" size={16} color="#fff" />
+              <Text style={styles.actionButtonText}>Aprobar</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.actionButton, { backgroundColor: themeColors.danger }]}
+              onPress={() => {
+                Alert.alert('Rechazar Pago', `¿Estás seguro de marcar este pago como fallido?`, [
+                  { text: 'Cancelar', style: 'cancel' },
+                  { text: 'Rechazar', onPress: () => handleUpdateStatus('FAILED') },
+                ]);
+              }}
+            >
+              <Ionicons name="close" size={16} color="#fff" />
+              <Text style={styles.actionButtonText}>Rechazar</Text>
+            </TouchableOpacity>
+          </View>
         )}
-      </View>
-      
-      <View style={styles.paymentFooter}>
-        <Text style={[styles.paymentDate, { color: themeColors.subText }]}>
-          {new Date(payment.createdAt).toLocaleDateString('es-ES', {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-          })}
-        </Text>
-        {payment.processedAt && (
-          <Text style={[styles.processedDate, { color: themeColors.success }]}>
-            Procesado: {new Date(payment.processedAt).toLocaleTimeString('es-ES', {
+
+        {payment.status === 'COMPLETED' && (
+          <View style={styles.actionButtons}>
+            <TouchableOpacity
+              style={[styles.actionButton, { backgroundColor: themeColors.info }]}
+              onPress={() => {
+                Alert.alert(
+                  'Reembolsar Pago',
+                  `¿Estás seguro de reembolsar este pago de $${payment.amount.toFixed(2)}?`,
+                  [
+                    { text: 'Cancelar', style: 'cancel' },
+                    { text: 'Reembolsar', onPress: () => handleUpdateStatus('REFUNDED') },
+                  ]
+                );
+              }}
+            >
+              <Ionicons name="return-down-back" size={16} color="#fff" />
+              <Text style={styles.actionButtonText}>Reembolsar</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        <View style={styles.paymentFooter}>
+          <Text style={[styles.paymentDate, { color: themeColors.subText }]}>
+            {new Date(payment.createdAt).toLocaleDateString('es-ES', {
+              year: 'numeric',
+              month: 'short',
+              day: 'numeric',
               hour: '2-digit',
-              minute: '2-digit'
+              minute: '2-digit',
             })}
           </Text>
-        )}
+          {payment.processedAt && (
+            <Text style={[styles.processedDate, { color: themeColors.success }]}>
+              Procesado:{' '}
+              {new Date(payment.processedAt).toLocaleTimeString('es-ES', {
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
+            </Text>
+          )}
+        </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: themeColors.background }]}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={[styles.pageTitle, { color: themeColors.textColor }]}>
-          Gestión de Pagos
-        </Text>
+        <Text style={[styles.pageTitle, { color: themeColors.textColor }]}>Gestión de Pagos</Text>
         <Text style={[styles.pageSubtitle, { color: themeColors.subText }]}>
           Análisis de transacciones y métodos de pago
         </Text>
       </View>
 
-      <ScrollView
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-      >
+      <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
         {/* Stats Cards */}
         <View style={[styles.statsGrid, { flexDirection: isLargeScreen ? 'row' : 'column' }]}>
           <StatCard
@@ -363,16 +496,14 @@ export default function AdminPayments() {
 
         {/* Payment Methods Stats */}
         <View style={[styles.chartCard, { backgroundColor: themeColors.cardBg }]}>
-          <Text style={[styles.cardTitle, { color: themeColors.textColor }]}>
-            Métodos de Pago
-          </Text>
+          <Text style={[styles.cardTitle, { color: themeColors.textColor }]}>Métodos de Pago</Text>
           {stats.methodStats.map((method, index) => (
             <View key={index} style={styles.methodStat}>
               <View style={styles.methodInfo}>
-                <Ionicons 
-                  name={getMethodIcon(method.method) as any} 
-                  size={24} 
-                  color={themeColors.accent} 
+                <Ionicons
+                  name={getMethodIcon(method.method) as any}
+                  size={24}
+                  color={themeColors.accent}
                 />
                 <Text style={[styles.methodName, { color: themeColors.textColor }]}>
                   {method.method}
@@ -411,17 +542,49 @@ export default function AdminPayments() {
                 style={[
                   styles.filterButton,
                   {
-                    backgroundColor: statusFilter === status ? themeColors.accent : themeColors.inputBg,
-                    borderColor: themeColors.borderColor
-                  }
+                    backgroundColor:
+                      statusFilter === status ? themeColors.accent : themeColors.inputBg,
+                    borderColor: themeColors.borderColor,
+                  },
                 ]}
                 onPress={() => setStatusFilter(status)}
               >
-                <Text style={[
-                  styles.filterText,
-                  { color: statusFilter === status ? '#fff' : themeColors.textColor }
-                ]}>
+                <Text
+                  style={[
+                    styles.filterText,
+                    { color: statusFilter === status ? '#fff' : themeColors.textColor },
+                  ]}
+                >
                   {status === 'ALL' ? 'Todos' : status}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+
+        {/* Method Filters - Solo métodos realmente implementados */}
+        <View style={styles.filtersContainer}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            {['ALL', 'MERCADOPAGO', 'CARD', 'TRANSFER', 'PAYPAL', 'CRYPTO'].map((method) => (
+              <TouchableOpacity
+                key={method}
+                style={[
+                  styles.filterButton,
+                  {
+                    backgroundColor:
+                      methodFilter === method ? themeColors.info : themeColors.inputBg,
+                    borderColor: themeColors.borderColor,
+                  },
+                ]}
+                onPress={() => setMethodFilter(method)}
+              >
+                <Text
+                  style={[
+                    styles.filterText,
+                    { color: methodFilter === method ? '#fff' : themeColors.textColor },
+                  ]}
+                >
+                  {method === 'ALL' ? 'Todos los métodos' : getMethodDisplayName(method)}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -436,13 +599,20 @@ export default function AdminPayments() {
           {filteredPayments.map((payment) => (
             <PaymentCard key={payment.id} payment={payment} />
           ))}
-          
+
           {filteredPayments.length === 0 && (
             <View style={styles.emptyState}>
               <Ionicons name="card-outline" size={64} color={themeColors.subText} />
               <Text style={[styles.emptyText, { color: themeColors.subText }]}>
-                No se encontraron transacciones
+                {payments.length === 0
+                  ? 'No hay transacciones en la base de datos'
+                  : 'No se encontraron transacciones con los filtros aplicados'}
               </Text>
+              {payments.length === 0 && (
+                <Text style={[styles.emptySubtext, { color: themeColors.subText }]}>
+                  Las transacciones aparecerán aquí cuando los usuarios realicen pagos
+                </Text>
+              )}
             </View>
           )}
         </View>
@@ -667,6 +837,29 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
   },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 15,
+    paddingTop: 15,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    flex: 1,
+    justifyContent: 'center',
+  },
+  actionButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -675,5 +868,12 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     marginTop: 15,
+    textAlign: 'center',
+  },
+  emptySubtext: {
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
 });

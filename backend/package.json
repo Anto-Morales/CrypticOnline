@@ -1,6 +1,6 @@
 {
   "name": "cryptic-online-backend",
-  "version": "1.0.0",
+  "version": "3.0.0",
   "description": "Backend para CrypticOnline - E-commerce",
   "main": "src/server.js",
   "type": "module",

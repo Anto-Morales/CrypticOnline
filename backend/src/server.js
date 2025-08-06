@@ -15,6 +15,9 @@ import orderRoutes from './routes/order.routes.js';
 import paymentsRoutes from './routes/payments.routes.js';
 import userRoutes from './routes/user.routes.js';
 
+// Rutas de administración de pagos
+import adminPaymentsRoutes from './routes/admin.payments.routes.js';
+
 dotenv.config();
 
 const app = express();
@@ -89,6 +92,7 @@ app.use('/api/orders', orderRoutes); // 📦 RUTAS DE ÓRDENES (usando order.rou
 app.use('/api/user', userRoutes); // NUEVA RUTA PARA USUARIO
 app.use('/api/notifications', notificationRoutes); // NUEVA RUTA PARA NOTIFICACIONES
 app.use('/api/payments', paymentsRoutes); // NUEVA RUTA PARA PAGOS
+app.use('/api/admin/payments', adminPaymentsRoutes); // Rutas de administración de pagos
 console.log('✅ Rutas registradas');
 
 // Root endpoint
