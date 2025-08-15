@@ -66,12 +66,14 @@ interface Payment {
   id: number;
   orderId: number;
   amount: number;
-  method: 'MERCADOPAGO' | 'CARD' | 'TRANSFER' | 'PAYPAL' | 'CRYPTO'; // Solo métodos realmente implementados
+  method: 'PAYPAL' | 'MERCADOPAGO' | 'CRYPTO' | 'CARD' | 'TRANSFER' | null; // Basado en schema real
   status: 'PENDING' | 'COMPLETED' | 'FAILED' | 'REFUNDED';
   transactionId?: string;
   preferenceId?: string;
+  provider?: string; // Campo adicional del schema
   order: {
     id: number;
+    paymentMethod?: 'PAYPAL' | 'MERCADOPAGO' | 'CRYPTO' | null; // Enum del schema
     user: {
       nombres: string;
       apellidoPaterno: string;
@@ -215,19 +217,25 @@ export default function AdminPayments() {
     loadPayments();
   };
 
-  const getMethodDisplayName = (method: string) => {
+  const getMethodDisplayName = (method: string | null) => {
+    if (!method) return 'Desconocido';
+
     switch (method.toUpperCase()) {
+      // Enum PaymentMethod del schema Prisma
+      case 'PAYPAL':
+        return 'PayPal';
       case 'MERCADOPAGO':
         return 'MercadoPago';
+      case 'CRYPTO':
+        return 'Criptomonedas';
+
+      // Posibles valores del campo provider
       case 'CARD':
         return 'Tarjeta';
       case 'TRANSFER':
         return 'Transferencia';
-      case 'PAYPAL':
-        return 'PayPal';
-      case 'CRYPTO':
-        return 'Criptomonedas';
-      // Solo métodos realmente implementados
+
+      // Fallback
       default:
         return method;
     }
@@ -263,24 +271,29 @@ export default function AdminPayments() {
     }
   };
 
-  const getMethodIcon = (method: string) => {
+  const getMethodIcon = (method: string | null) => {
+    if (!method) return 'help-outline'; // Icono por defecto si method es undefined/null
+
     switch (method.toUpperCase()) {
+      // Enum PaymentMethod del schema
+      case 'PAYPAL':
+        return 'logo-paypal';
       case 'MERCADOPAGO':
         return 'card-outline';
+      case 'CRYPTO':
+        return 'logo-bitcoin';
+
+      // Posibles valores del provider
       case 'CARD':
         return 'credit-card-outline';
       case 'TRANSFER':
         return 'swap-horizontal-outline';
-      case 'PAYPAL':
-        return 'logo-paypal';
-      case 'CRYPTO':
-        return 'logo-bitcoin';
-      // Solo iconos para métodos implementados
+
+      // Fallback
       default:
         return 'card-outline';
     }
   };
-
   const filteredPayments = payments.filter((payment) => {
     const matchesSearch =
       payment.order.user.nombres.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -535,7 +548,11 @@ export default function AdminPayments() {
 
         {/* Filters */}
         <View style={styles.filtersContainer}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ alignItems: 'center' }}
+          >
             {['ALL', 'COMPLETED', 'PENDING', 'FAILED', 'REFUNDED'].map((status) => (
               <TouchableOpacity
                 key={status}
@@ -562,10 +579,14 @@ export default function AdminPayments() {
           </ScrollView>
         </View>
 
-        {/* Method Filters - Solo métodos realmente implementados */}
+        {/* Method Filters - Basados en schema real de Prisma */}
         <View style={styles.filtersContainer}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {['ALL', 'MERCADOPAGO', 'CARD', 'TRANSFER', 'PAYPAL', 'CRYPTO'].map((method) => (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ alignItems: 'center' }}
+          >
+            {['ALL', 'PAYPAL', 'MERCADOPAGO', 'CRYPTO', 'CARD', 'TRANSFER'].map((method) => (
               <TouchableOpacity
                 key={method}
                 style={[
@@ -624,10 +645,9 @@ export default function AdminPayments() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
     backgroundColor: '#f8f9fa',
     padding: 20,
+    width: '100%', // Asegura que el contenido ocupe todo el ancho
   },
   header: {
     marginBottom: 20,

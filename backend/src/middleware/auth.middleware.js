@@ -53,6 +53,8 @@ export const authMiddleware = async (req, res, next) => {
           codigoPostal: true,
           referencias: true,
           role: true,
+          adminLevel: true, // Incluir adminLevel
+          permissions: true, // Incluir permissions
           isActive: true,
         },
       });
@@ -74,6 +76,8 @@ export const authMiddleware = async (req, res, next) => {
           codigoPostal: true,
           referencias: true,
           role: true,
+          adminLevel: true, // Incluir adminLevel
+          permissions: true, // Incluir permissions
           isActive: true,
         },
       });
@@ -127,7 +131,7 @@ export const authMiddleware = async (req, res, next) => {
 // Alias para compatibilidad
 export const authenticateToken = authMiddleware;
 
-// Middleware específico para admin - SIMPLIFICADO Y CORREGIDO
+// Middleware específico para admin - CORREGIDO PARA MAYÚSCULAS/MINÚSCULAS Y adminLevel
 export const adminMiddleware = async (req, res, next) => {
   try {
     // El usuario ya está verificado por authMiddleware que debe llamarse antes
@@ -139,18 +143,41 @@ export const adminMiddleware = async (req, res, next) => {
       });
     }
 
-    console.log('🔍 Verificando permisos de admin para:', req.user.email, 'Role:', req.user.role);
+    console.log(
+      '🔍 Verificando permisos de admin para:',
+      req.user.email,
+      'Role:',
+      req.user.role,
+      'AdminLevel:',
+      req.user.adminLevel
+    );
 
-    // Verificar que el usuario sea admin
-    if (req.user.role === 'ADMIN') {
-      console.log('✅ Usuario admin verificado:', req.user.email);
+    // Verificar que el usuario sea admin (normalizar a mayúsculas para comparación)
+    // O que tenga adminLevel definido (SUPER_ADMIN, ADMIN, etc.)
+    const userRole = req.user.role?.toUpperCase();
+    const hasAdminRole = userRole === 'ADMIN';
+    const hasAdminLevel =
+      req.user.adminLevel &&
+      ['SUPER_ADMIN', 'ADMIN', 'MODERATOR', 'SUPPORT'].includes(req.user.adminLevel);
+
+    if (hasAdminRole || hasAdminLevel) {
+      console.log(
+        '✅ Usuario admin verificado:',
+        req.user.email,
+        'Role:',
+        userRole,
+        'AdminLevel:',
+        req.user.adminLevel
+      );
       next();
     } else {
       console.log(
         '❌ Acceso denegado - No es admin:',
         req.user.email,
         'Role actual:',
-        req.user.role
+        req.user.role,
+        'AdminLevel:',
+        req.user.adminLevel
       );
       res.status(403).json({
         error: 'Acceso denegado',
@@ -168,3 +195,53 @@ export const adminMiddleware = async (req, res, next) => {
 
 // Usar adminMiddleware como isAdmin para compatibilidad
 export const isAdmin = adminMiddleware;
+
+/**
+ * 🛡️ Middleware mejorado para verificar niveles de administrador
+ */
+export const adminLevelMiddleware = (requiredLevel = 'SUPPORT') => {
+  return async (req, res, next) => {
+    try {
+      const user = req.user;
+
+      if (!user) {
+        return res.status(401).json({
+          success: false,
+          message: 'Usuario no autenticado',
+        });
+      }
+
+      console.log('🔍 Verificando nivel de admin:', user.email);
+      console.log('👑 Nivel actual:', user.adminLevel);
+      console.log('📋 Nivel requerido:', requiredLevel);
+
+      // Jerarquía de niveles (mayor a menor)
+      const levels = {
+        SUPER_ADMIN: 4,
+        ADMIN: 3,
+        MODERATOR: 2,
+        SUPPORT: 1,
+      };
+
+      const userLevel = levels[user.adminLevel] || 0;
+      const requiredLevelValue = levels[requiredLevel] || 0;
+
+      if (userLevel < requiredLevelValue) {
+        console.log('❌ Nivel de administrador insuficiente');
+        return res.status(403).json({
+          success: false,
+          message: `Se requiere nivel de administrador: ${requiredLevel}`,
+        });
+      }
+
+      console.log('✅ Nivel de administrador suficiente');
+      next();
+    } catch (error) {
+      console.error('❌ Error en middleware de nivel admin:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error interno del servidor',
+      });
+    }
+  };
+};

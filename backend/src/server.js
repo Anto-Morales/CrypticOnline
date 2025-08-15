@@ -1,6 +1,10 @@
+import bcrypt from 'bcryptjs';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import express from 'express';
+
+// Database
+import prisma from './prisma/db.js';
 
 // Routes
 import authRoutes from './routes/auth.routes.js';
@@ -17,6 +21,11 @@ import userRoutes from './routes/user.routes.js';
 
 // Rutas de administración de pagos
 import adminPaymentsRoutes from './routes/admin.payments.routes.js';
+// Rutas de administración de usuarios
+import adminUsersRoutes from './routes/admin.users.routes.js';
+// Rutas de gestión de administradores
+import adminManagementRoutes from './routes/admin.management.routes.js';
+import adminOrderRoutes from './routes/admin.order.routes.js';
 
 dotenv.config();
 
@@ -93,6 +102,9 @@ app.use('/api/user', userRoutes); // NUEVA RUTA PARA USUARIO
 app.use('/api/notifications', notificationRoutes); // NUEVA RUTA PARA NOTIFICACIONES
 app.use('/api/payments', paymentsRoutes); // NUEVA RUTA PARA PAGOS
 app.use('/api/admin/payments', adminPaymentsRoutes); // Rutas de administración de pagos
+app.use('/api/admin/users', adminUsersRoutes); // Rutas de administración de usuarios
+app.use('/api/admin/management', adminManagementRoutes); // Rutas de gestión de administradores
+app.use(adminOrderRoutes);
 console.log('✅ Rutas registradas');
 
 // Root endpoint
@@ -182,6 +194,106 @@ app.all('/webhook-test', (req, res) => {
       query: req.query,
     },
   });
+});
+
+/**
+ * 🚨 RUTA TEMPORAL: Crear primer SUPER_ADMIN
+ * ⚠️ ELIMINAR DESPUÉS DE CREAR EL PRIMER ADMIN
+ */
+app.post('/api/create-super-admin-bootstrap', async (req, res) => {
+  try {
+    const { secretKey } = req.body;
+
+    // Verificar clave secreta para seguridad
+    if (secretKey !== 'CRYPTIC_BOOTSTRAP_2025') {
+      return res.status(403).json({
+        success: false,
+        message: 'Clave secreta incorrecta',
+      });
+    }
+
+    console.log('🚀 Creando SUPER_ADMIN inicial via bootstrap...');
+
+    // Verificar si ya existe algún SUPER_ADMIN
+    const existingSuperAdmin = await prisma.user.findFirst({
+      where: {
+        adminLevel: 'SUPER_ADMIN',
+      },
+    });
+
+    if (existingSuperAdmin) {
+      return res.status(400).json({
+        success: false,
+        message: 'Ya existe un SUPER_ADMIN en el sistema',
+        email: existingSuperAdmin.email,
+      });
+    }
+
+    // Datos del SUPER_ADMIN
+    const superAdminData = {
+      nombres: 'Angel Valentin',
+      apellidoPaterno: 'Flores',
+      apellidoMaterno: 'Admin',
+      email: 'angel.edu0808@hotmail.com',
+      password: await bcrypt.hash('SuperAdmin2025!', 10),
+      telefono: '+52 55 1234 5678',
+      calle: 'Calle Principal',
+      numero: '123',
+      colonia: 'Centro',
+      ciudad: 'Ciudad de México',
+      estado: 'CDMX',
+      codigoPostal: '01000',
+      referencias: 'Super Administrador Inicial',
+      role: 'admin',
+      adminLevel: 'SUPER_ADMIN',
+      permissions: {
+        users: { read: true, create: true, update: true, delete: true },
+        orders: { read: true, create: true, update: true, delete: true },
+        payments: { read: true, create: true, update: true, delete: true },
+        products: { read: true, create: true, update: true, delete: true },
+        admins: { read: true, create: true, update: true, delete: true },
+        settings: { read: true, update: true },
+        reports: { read: true, export: true },
+        system: { read: true, update: true, backup: true, restore: true },
+      },
+      isActive: true,
+    };
+
+    // Crear SUPER_ADMIN
+    const superAdmin = await prisma.user.create({
+      data: superAdminData,
+      select: {
+        id: true,
+        nombres: true,
+        apellidoPaterno: true,
+        email: true,
+        role: true,
+        adminLevel: true,
+        isActive: true,
+        createdAt: true,
+      },
+    });
+
+    console.log('✅ SUPER_ADMIN creado exitosamente:', superAdmin.email);
+
+    res.json({
+      success: true,
+      message: 'SUPER_ADMIN creado exitosamente',
+      admin: superAdmin,
+      credentials: {
+        email: 'angel.edu0808@hotmail.com',
+        password: 'SuperAdmin2025!',
+        note: '⚠️ CAMBIAR CONTRASEÑA INMEDIATAMENTE',
+      },
+    });
+  } catch (error) {
+    console.error('❌ Error creando SUPER_ADMIN:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error creando SUPER_ADMIN',
+      error: error.message,
+    });
+  }
 });
 
 // 404 handler

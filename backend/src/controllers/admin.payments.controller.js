@@ -10,7 +10,7 @@ const getPaymentStats = async (req, res) => {
   try {
     console.log('📊 Obteniendo estadísticas REALES de pagos para admin...');
 
-    // Obtener todos los pagos de la base de datos
+    // Obtener todos los pagos de la base de datos con relaciones completas
     const allPayments = await prisma.payment.findMany({
       include: {
         order: {
@@ -32,6 +32,18 @@ const getPaymentStats = async (req, res) => {
     });
 
     console.log(`📋 Total de pagos encontrados en BD: ${allPayments.length}`);
+
+    // Mostrar estructura de datos para debugging
+    if (allPayments.length > 0) {
+      console.log('🔍 Estructura del primer pago:', {
+        id: allPayments[0].id,
+        provider: allPayments[0].provider,
+        status: allPayments[0].status,
+        amount: allPayments[0].amount,
+        paymentMethod: allPayments[0].order?.paymentMethod,
+        orderId: allPayments[0].orderId,
+      });
+    }
 
     // Filtrar solo pagos completados para estadísticas de ingresos
     const completedPayments = allPayments.filter((payment) => payment.status === 'COMPLETED');
@@ -61,10 +73,11 @@ const getPaymentStats = async (req, res) => {
 
     const todayTransactions = todayPayments.length;
 
-    // Estadísticas por método de pago (solo métodos reales que existen en BD)
+    // Estadísticas por método de pago (usar paymentMethod de la orden)
     const methodCounts = {};
     completedPayments.forEach((payment) => {
-      const method = payment.method || 'UNKNOWN';
+      // Usar paymentMethod de la orden o provider del pago como fallback
+      const method = payment.order?.paymentMethod || payment.provider || 'UNKNOWN';
       if (!methodCounts[method]) {
         methodCounts[method] = { count: 0, amount: 0 };
       }
@@ -98,6 +111,14 @@ const getPaymentStats = async (req, res) => {
       debug: {
         totalPaymentsInDB: allPayments.length,
         methodsInDB: Object.keys(methodCounts),
+        samplePayment:
+          allPayments.length > 0
+            ? {
+                provider: allPayments[0].provider,
+                paymentMethod: allPayments[0].order?.paymentMethod,
+                status: allPayments[0].status,
+              }
+            : null,
       },
     });
   } catch (error) {
@@ -125,8 +146,10 @@ const getAllPayments = async (req, res) => {
     if (status && status !== 'ALL') {
       where.status = status;
     }
+
+    // Filtrar por método de pago (del provider o del paymentMethod de la orden)
     if (method && method !== 'ALL') {
-      where.method = method;
+      where.OR = [{ provider: method }, { order: { paymentMethod: method } }];
     }
 
     console.log('🔍 Filtros aplicados:', where);
@@ -158,27 +181,41 @@ const getAllPayments = async (req, res) => {
     // Contar total de pagos REALES para paginación
     const totalPayments = await prisma.payment.count({ where });
 
+    // Transformar los pagos para incluir el método de pago correcto
+    const transformedPayments = payments.map((payment) => ({
+      ...payment,
+      // Agregar campo method basado en paymentMethod de la orden o provider
+      method: payment.order?.paymentMethod || payment.provider || null,
+    }));
+
     // Log detallado para debugging
     console.log(`✅ Pagos REALES encontrados: ${payments.length} de ${totalPayments} totales`);
 
     if (payments.length > 0) {
       console.log('📊 Detalles de pagos encontrados:');
-      payments.forEach((payment, index) => {
+      transformedPayments.forEach((payment, index) => {
         console.log(
-          `  ${index + 1}. Pago #${payment.id} - Orden #${payment.orderId} - ${payment.method} - ${payment.status} - $${payment.amount}`
+          `  ${index + 1}. Pago #${payment.id} - Orden #${payment.orderId} - Provider: ${payment.provider} - PaymentMethod: ${payment.order?.paymentMethod} - Method: ${payment.method} - Status: ${payment.status} - $${payment.amount}`
         );
       });
 
       // Mostrar métodos únicos encontrados
-      const uniqueMethods = [...new Set(payments.map((p) => p.method))];
-      console.log('💳 Métodos de pago únicos en BD:', uniqueMethods);
+      const uniqueMethods = [...new Set(transformedPayments.map((p) => p.method))];
+      const uniqueProviders = [...new Set(payments.map((p) => p.provider))];
+      const uniquePaymentMethods = [
+        ...new Set(payments.map((p) => p.order?.paymentMethod).filter(Boolean)),
+      ];
+
+      console.log('💳 Métodos finales únicos:', uniqueMethods);
+      console.log('🏪 Providers únicos en BD:', uniqueProviders);
+      console.log('💰 PaymentMethods únicos en BD:', uniquePaymentMethods);
     } else {
       console.log('⚠️ No se encontraron pagos en la base de datos');
     }
 
     res.json({
       success: true,
-      payments,
+      payments: transformedPayments,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
@@ -189,6 +226,14 @@ const getAllPayments = async (req, res) => {
         totalPaymentsInDB: totalPayments,
         currentPageResults: payments.length,
         filtersApplied: where,
+        dataStructure:
+          payments.length > 0
+            ? {
+                provider: payments[0].provider,
+                paymentMethod: payments[0].order?.paymentMethod,
+                finalMethod: transformedPayments[0].method,
+              }
+            : null,
       },
     });
   } catch (error) {
@@ -278,25 +323,30 @@ const updatePaymentStatus = async (req, res) => {
 };
 
 /**
- * 🔍 FUNCIÓN AUXILIAR: Convertir método de pago a nombre display (solo métodos reales)
+ * 🔍 FUNCIÓN AUXILIAR: Convertir método de pago a nombre display (basado en schema de Prisma)
  */
 const getMethodDisplayName = (method) => {
+  if (!method) return 'Desconocido';
+
   switch (method?.toUpperCase()) {
+    // Enum PaymentMethod del schema
+    case 'PAYPAL':
+      return 'PayPal';
     case 'MERCADOPAGO':
       return 'MercadoPago';
+    case 'CRYPTO':
+      return 'Criptomonedas';
+
+    // Posibles valores del campo provider
     case 'CARD':
       return 'Tarjeta';
     case 'TRANSFER':
       return 'Transferencia';
-    case 'PAYPAL':
-      return 'PayPal';
-    case 'CRYPTO':
-      return 'Criptomonedas';
-    // Solo incluir métodos que realmente hemos implementado
-    // Remover OXXO hasta que se implemente
+
+    // Fallback
     default:
-      return method || 'Desconocido';
+      return method;
   }
 };
 
-export { getPaymentStats, getAllPayments, updatePaymentStatus };
+export { getAllPayments, getPaymentStats, updatePaymentStatus };

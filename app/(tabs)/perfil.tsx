@@ -385,7 +385,7 @@ export default function PerfilScreen() {
         {/* Footer con información de la app */}
         <View style={styles.footer}>
           <Text style={[styles.footerText, { color: isDark ? '#666' : '#999' }]}>
-            CrypticOnline v2.7.3
+            CrypticOnline v3.10.4
           </Text>
           <Text style={[styles.footerText, { color: isDark ? '#666' : '#999' }]}>
             © 2025 Todos los derechos reservados

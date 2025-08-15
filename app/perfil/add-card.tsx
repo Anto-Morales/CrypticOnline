@@ -2,20 +2,20 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Stack, useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
-    Alert,
-    Keyboard,
-    KeyboardAvoidingView,
-    Platform,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    TouchableWithoutFeedback,
-    useColorScheme,
-    View,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  useColorScheme,
+  View,
 } from 'react-native';
+import PaymentAlert from '../components/PaymentAlert';
 import { createApiUrl, createAuthHeaders } from '../config/api';
 
 export default function AddCardScreen() {
@@ -30,6 +30,14 @@ export default function AddCardScreen() {
     cvv: '',
   });
   const [loading, setLoading] = useState(false);
+  const [modal, setModal] = useState({
+    visible: false,
+    type: 'info',
+    title: '',
+    message: '',
+    onClose: () => {},
+    buttonText: 'OK',
+  });
 
   // Formatear número de tarjeta
   const formatCardNumber = (value: string) => {
@@ -65,20 +73,39 @@ export default function AddCardScreen() {
     return 'unknown';
   };
 
+  // Mostrar modal
+  const showModal = (
+    type: 'success' | 'error',
+    title: string,
+    message: string,
+    onClose?: () => void,
+    buttonText?: string
+  ) => {
+    setModal({
+      visible: true,
+      type,
+      title,
+      message,
+      onClose: onClose || (() => setModal({ ...modal, visible: false })),
+      buttonText: buttonText || 'OK',
+    });
+  };
+
   // Función corregida para manejar submit con async/await
   const handleSubmitAsync = async () => {
     // Validaciones básicas
     if (!formData.cardNumber || !formData.cardHolder || !formData.expiryDate || !formData.cvv) {
-      Alert.alert('Error', 'Todos los campos son obligatorios');
+      showModal('error', 'Error', 'Todos los campos son obligatorios');
       return;
     }
-    
+
     // Detectar tipo de tarjeta para validar CVV
     const cardType = detectCardType(formData.cardNumber);
     const expectedCVVLength = cardType === 'amex' ? 4 : 3;
     if (formData.cvv.length !== expectedCVVLength) {
-      Alert.alert(
-        'CVV Inválido', 
+      showModal(
+        'error',
+        'CVV Inválido',
         `El CVV debe tener ${expectedCVVLength} dígitos para tarjetas ${cardType.toUpperCase()}`
       );
       return;
@@ -88,7 +115,7 @@ export default function AddCardScreen() {
     try {
       const token = await AsyncStorage.getItem('token');
       if (!token) {
-        Alert.alert('Error', 'No se encontró token de autenticación');
+        showModal('error', 'Error', 'No se encontró token de autenticación');
         setLoading(false);
         return;
       }
@@ -114,21 +141,14 @@ export default function AddCardScreen() {
 
       if (response.ok) {
         const result = await response.json();
-        console.log('✅ Tarjeta guardada exitosamente:', result);
-        
-        Alert.alert('Éxito', 'Tarjeta agregada correctamente', [
-          {
-            text: 'OK',
-            onPress: () => router.back(),
-          },
-        ]);
+        showModal('success', 'Éxito', 'Tarjeta agregada correctamente', () => router.back(), 'OK');
       } else {
         const errorData = await response.json();
         console.error('❌ Error guardando tarjeta:', response.status, errorData);
-        
+
         // Manejar errores específicos
         let errorMessage = 'No se pudo guardar la tarjeta';
-        
+
         if (errorData.details && errorData.details.includes('cardholder.identification.type')) {
           errorMessage = 'Error de configuración del país. Por favor contacta al soporte.';
         } else if (errorData.details && errorData.details.includes('card_number')) {
@@ -140,12 +160,11 @@ export default function AddCardScreen() {
         } else if (errorData.message) {
           errorMessage = errorData.message;
         }
-        
-        Alert.alert('Error al Agregar Tarjeta', errorMessage);
+
+        showModal('error', 'Error al Agregar Tarjeta', errorMessage);
       }
     } catch (error) {
-      console.error('❌ Error guardando tarjeta:', error);
-      Alert.alert('Error', 'Error de conexión al guardar la tarjeta');
+      showModal('error', 'Error', 'Error de conexión al guardar la tarjeta');
     } finally {
       setLoading(false);
     }
@@ -273,7 +292,9 @@ export default function AddCardScreen() {
                   <Text style={[styles.securityText, { color: isDark ? '#666' : '#999' }]}>
                     🔒 Tu información está protegida con encriptación de extremo a extremo
                   </Text>
-                  <Text style={[styles.securityText, { color: isDark ? '#666' : '#999', marginTop: 4 }]}>
+                  <Text
+                    style={[styles.securityText, { color: isDark ? '#666' : '#999', marginTop: 4 }]}
+                  >
                     🇲🇽 Procesado con MercadoPago México
                   </Text>
                 </View>
@@ -299,6 +320,18 @@ export default function AddCardScreen() {
           </TouchableWithoutFeedback>
         </KeyboardAvoidingView>
       </SafeAreaView>
+
+      <PaymentAlert
+        visible={modal.visible}
+        type={modal.type as any}
+        title={modal.title}
+        message={modal.message}
+        onPrimaryAction={() => {
+          setModal({ ...modal, visible: false });
+          modal.onClose && modal.onClose();
+        }}
+        primaryText={modal.buttonText}
+      />
     </>
   );
 }

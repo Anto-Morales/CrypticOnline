@@ -1,10 +1,10 @@
 import express from 'express';
-import { authenticateToken, adminMiddleware } from '../middleware/auth.middleware.js';
 import {
-  getPaymentStats,
   getAllPayments,
+  getPaymentStats,
   updatePaymentStatus,
 } from '../controllers/admin.payments.controller.js';
+import { adminMiddleware, authenticateToken } from '../middleware/auth.middleware.js';
 
 const router = express.Router();
 

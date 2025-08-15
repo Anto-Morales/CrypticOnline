@@ -36,6 +36,7 @@ export default function ProductoDetalleScreen() {
         options={{
           title: 'Detalle del Producto',
           headerShown: true,
+          headerBackTitle: 'Volver',
         }}
       />
       <View style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}>

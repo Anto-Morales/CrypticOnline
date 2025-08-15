@@ -74,7 +74,7 @@ export default function PagoScreen() {
     title: '',
     message: '',
     orderId: '',
-    cardInfo: ''
+    cardInfo: '',
   });
   const params = useLocalSearchParams();
   const router = useRouter();
@@ -122,7 +122,7 @@ export default function PagoScreen() {
         const data = await response.json();
         console.log('✅ Tarjetas cargadas:', data.cards?.length || 0);
         setSavedCards(data.cards || []);
-        
+
         // Seleccionar tarjeta por defecto automáticamente
         const defaultCard = data.cards?.find((card: PaymentCard) => card.isDefault);
         if (defaultCard) {
@@ -321,7 +321,7 @@ export default function PagoScreen() {
       }
 
       const cardToUse = selectedCard || savedCards[0];
-      
+
       if (!cardToUse) {
         Alert.alert('Error', 'No se pudo seleccionar una tarjeta');
         return;
@@ -331,28 +331,30 @@ export default function PagoScreen() {
       let totalAmount = 0;
       if (orderId) {
         // Si ya hay orden, usar el total de los parámetros o calcular
-        totalAmount = parseFloat(params.total as string) || 
-                     ((parseFloat(params.precio as string) || 0) * (parseInt(params.cantidad as string) || 1)) + 50;
+        totalAmount =
+          parseFloat(params.total as string) ||
+          (parseFloat(params.precio as string) || 0) * (parseInt(params.cantidad as string) || 1) +
+            50;
       } else {
         // Calcular según el tipo de compra
         const isCartPurchase = params.productoId === 'carrito';
         if (isCartPurchase && carrito.items) {
-          totalAmount = carrito.items.reduce(
-            (sum: number, item: any) => sum + item.unit_price * item.quantity,
-            0
-          ) + 50; // + shipping
+          totalAmount =
+            carrito.items.reduce(
+              (sum: number, item: any) => sum + item.unit_price * item.quantity,
+              0
+            ) + 50; // + shipping
         } else {
           const productPrice = parseFloat(params.precio as string) || 0;
           const productQuantity = parseInt(params.cantidad as string) || 1;
           const shippingCost = parseFloat(params.shippingCost as string) || 50;
-          totalAmount = (productPrice * productQuantity) + shippingCost;
+          totalAmount = productPrice * productQuantity + shippingCost;
         }
       }
 
       // Guardar el monto y mostrar modal de confirmación
       setPaymentAmount(totalAmount);
       setShowPaymentConfirmation(true);
-
     } catch (error) {
       console.error('❌ Error preparando pago con tarjeta:', error);
       Alert.alert('Error', 'Error preparando el pago con tarjeta');
@@ -377,7 +379,7 @@ export default function PagoScreen() {
       }
 
       const cardToUse = selectedCard || savedCards[0];
-      
+
       if (!cardToUse) {
         Alert.alert('Error', 'No se pudo seleccionar una tarjeta');
         return;
@@ -394,11 +396,11 @@ export default function PagoScreen() {
       }
 
       let paymentOrderId = orderId;
-      
+
       // Si no hay orderId, necesitamos crear la orden primero
       if (!paymentOrderId) {
         console.log('📦 Creando nueva orden para pago con tarjeta...');
-        
+
         // Determinar datos de la orden
         const isCartPurchase = params.productoId === 'carrito';
         let orderData;
@@ -415,24 +417,27 @@ export default function PagoScreen() {
               quantity: item.quantity,
               unit_price: item.unit_price,
             })),
-            totalAmount: carrito.items.reduce(
-              (sum: number, item: any) => sum + item.unit_price * item.quantity,
-              0
-            ) + 50, // + shipping
+            totalAmount:
+              carrito.items.reduce(
+                (sum: number, item: any) => sum + item.unit_price * item.quantity,
+                0
+              ) + 50, // + shipping
             paymentMethod: 'MERCADOPAGO', // Agregar paymentMethod válido
           };
         } else {
           const productPrice = parseFloat(params.precio as string) || 0;
           const productQuantity = parseInt(params.cantidad as string) || 1;
           const shippingCost = parseFloat(params.shippingCost as string) || 50;
-          
+
           orderData = {
-            items: [{
-              productId: parseInt(params.productoId as string),
-              quantity: productQuantity,
-              unit_price: productPrice,
-            }],
-            totalAmount: (productPrice * productQuantity) + shippingCost,
+            items: [
+              {
+                productId: parseInt(params.productoId as string),
+                quantity: productQuantity,
+                unit_price: productPrice,
+              },
+            ],
+            totalAmount: productPrice * productQuantity + shippingCost,
             paymentMethod: 'MERCADOPAGO', // Agregar paymentMethod válido
           };
         }
@@ -445,7 +450,7 @@ export default function PagoScreen() {
         });
 
         const orderResult = await orderResponse.json();
-        
+
         if (!orderResponse.ok) {
           console.error('❌ Error creando orden:', orderResult);
           Alert.alert('Error', 'No se pudo crear la orden');
@@ -472,19 +477,18 @@ export default function PagoScreen() {
       });
 
       const paymentResult = await paymentResponse.json();
-      
+
       if (paymentResponse.ok && paymentResult.success) {
         console.log('✅ Pago con tarjeta exitoso');
-        
+
         // Mostrar modal de éxito en lugar de Alert
         setSuccessModalData({
           title: '¡Pago Exitoso!',
           message: `Tu pago ha sido procesado correctamente con tu tarjeta ${cardToUse.cardType.toUpperCase()}`,
           orderId: paymentOrderId?.toString() || '',
-          cardInfo: `${cardToUse.cardType.toUpperCase()} ****${cardToUse.cardNumber.slice(-4)}`
+          cardInfo: `${cardToUse.cardType.toUpperCase()} ****${cardToUse.cardNumber.slice(-4)}`,
         });
         setShowSuccessModal(true);
-        
       } else {
         console.error('❌ Error en pago con tarjeta:', paymentResult);
         Alert.alert(
@@ -492,11 +496,10 @@ export default function PagoScreen() {
           paymentResult.payment?.statusDetail || 'Tu pago fue rechazado. Intenta con otra tarjeta.',
           [
             { text: 'Cambiar Tarjeta', onPress: () => setShowCardSelection(true) },
-            { text: 'Cancelar', style: 'cancel' }
+            { text: 'Cancelar', style: 'cancel' },
           ]
         );
       }
-      
     } catch (error) {
       console.error('❌ Error en pago con tarjeta:', error);
       Alert.alert('Error', 'Error al procesar el pago con tarjeta');
@@ -1101,20 +1104,16 @@ export default function PagoScreen() {
                     <View style={styles.paymentMethodHeader}>
                       <Image
                         source={require('../../assets/images/credit-cards.png')}
-                        style={[
-                          styles.paymentHeaderIcon,
-                          { tintColor: isDark ? '#fff' : '#000' }
-                        ]}
+                        style={[styles.paymentHeaderIcon, { tintColor: isDark ? '#fff' : '#000' }]}
                       />
                       <Text style={[styles.paymentMethodName, { color: isDark ? '#fff' : '#000' }]}>
                         Tarjeta de Crédito/Débito
                       </Text>
                     </View>
                     <Text style={[styles.paymentMethodDesc, { color: isDark ? '#ccc' : '#666' }]}>
-                      {savedCards.length > 0 
+                      {savedCards.length > 0
                         ? `${savedCards.length} tarjeta${savedCards.length > 1 ? 's' : ''} guardada${savedCards.length > 1 ? 's' : ''}`
-                        : 'Visa, Mastercard, American Express'
-                      }
+                        : 'Visa, Mastercard, American Express'}
                     </Text>
                     <Text style={[styles.paymentMethodFeature, { color: '#4CAF50' }]}>
                       ✓ Pago directo y seguro
@@ -1137,10 +1136,7 @@ export default function PagoScreen() {
                     ) : (
                       <Image
                         source={require('../../assets/images/credit-cards.png')}
-                        style={[
-                          styles.paymentButtonIcon,
-                          { tintColor: '#4CAF50' }
-                        ]}
+                        style={[styles.paymentButtonIcon, { tintColor: '#4CAF50' }]}
                       />
                     )}
                   </TouchableOpacity>
@@ -1358,7 +1354,7 @@ export default function PagoScreen() {
               <Text style={[styles.modalTitle, { color: isDark ? '#fff' : '#000' }]}>
                 Selecciona tu tarjeta
               </Text>
-              
+
               <ScrollView style={styles.cardsContainer}>
                 {savedCards.map((card: PaymentCard) => (
                   <TouchableOpacity
@@ -1366,11 +1362,17 @@ export default function PagoScreen() {
                     style={[
                       styles.cardItem,
                       {
-                        backgroundColor: selectedCard?.id === card.id 
-                          ? (isDark ? 'rgba(76, 175, 80, 0.2)' : 'rgba(76, 175, 80, 0.1)')
-                          : (isDark ? '#333' : '#f5f5f5'),
-                        borderColor: selectedCard?.id === card.id ? '#4CAF50' : (isDark ? '#444' : '#ddd'),
-                      }
+                        backgroundColor:
+                          selectedCard?.id === card.id
+                            ? isDark
+                              ? 'rgba(76, 175, 80, 0.2)'
+                              : 'rgba(76, 175, 80, 0.1)'
+                            : isDark
+                              ? '#333'
+                              : '#f5f5f5',
+                        borderColor:
+                          selectedCard?.id === card.id ? '#4CAF50' : isDark ? '#444' : '#ddd',
+                      },
                     ]}
                     onPress={() => setSelectedCard(card)}
                   >
@@ -1379,9 +1381,9 @@ export default function PagoScreen() {
                         source={getCardIcon(card.cardType)}
                         style={[
                           styles.cardIcon,
-                          needsTintColor(card.cardType) 
+                          needsTintColor(card.cardType)
                             ? { tintColor: isDark ? '#fff' : '#000' }
-                            : {}
+                            : {},
                         ]}
                       />
                       <View style={styles.cardInfo}>
@@ -1415,7 +1417,7 @@ export default function PagoScreen() {
                   style={[
                     styles.modalButton,
                     styles.addCardButton,
-                    { backgroundColor: isDark ? '#333' : '#f5f5f5' }
+                    { backgroundColor: isDark ? '#333' : '#f5f5f5' },
                   ]}
                   onPress={() => {
                     setShowCardSelection(false);
@@ -1432,7 +1434,7 @@ export default function PagoScreen() {
                     style={[
                       styles.modalButton,
                       styles.cancelButton,
-                      { borderColor: isDark ? '#fff' : '#000' }
+                      { borderColor: isDark ? '#fff' : '#000' },
                     ]}
                     onPress={() => setShowCardSelection(false)}
                   >
@@ -1445,7 +1447,7 @@ export default function PagoScreen() {
                     style={[
                       styles.modalButton,
                       styles.confirmButton,
-                      { opacity: selectedCard ? 1 : 0.5 }
+                      { opacity: selectedCard ? 1 : 0.5 },
                     ]}
                     onPress={() => {
                       if (selectedCard) {
@@ -1455,9 +1457,7 @@ export default function PagoScreen() {
                     }}
                     disabled={!selectedCard}
                   >
-                    <Text style={styles.confirmButtonText}>
-                      Pagar con esta tarjeta
-                    </Text>
+                    <Text style={styles.confirmButtonText}>Pagar con esta tarjeta</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -1472,18 +1472,23 @@ export default function PagoScreen() {
               <Text style={[styles.modalTitle, { color: isDark ? '#fff' : '#000' }]}>
                 Confirmar Pago
               </Text>
-              
+
               <View style={styles.confirmationContainer}>
                 {/* Información de la tarjeta */}
-                <View style={[styles.confirmationCard, { backgroundColor: isDark ? '#333' : '#f5f5f5' }]}>
+                <View
+                  style={[
+                    styles.confirmationCard,
+                    { backgroundColor: isDark ? '#333' : '#f5f5f5' },
+                  ]}
+                >
                   <View style={styles.cardRow}>
                     <Image
                       source={getCardIcon(selectedCard.cardType)}
                       style={[
                         styles.cardIcon,
-                        needsTintColor(selectedCard.cardType) 
+                        needsTintColor(selectedCard.cardType)
                           ? { tintColor: isDark ? '#fff' : '#000' }
-                          : {}
+                          : {},
                       ]}
                     />
                     <View style={styles.cardInfo}>
@@ -1503,11 +1508,13 @@ export default function PagoScreen() {
                 </View>
 
                 {/* Detalles del pago */}
-                <View style={[styles.paymentDetails, { backgroundColor: isDark ? '#333' : '#f9f9f9' }]}>
+                <View
+                  style={[styles.paymentDetails, { backgroundColor: isDark ? '#333' : '#f9f9f9' }]}
+                >
                   <Text style={[styles.paymentDetailsTitle, { color: isDark ? '#fff' : '#000' }]}>
                     Detalles del Pago
                   </Text>
-                  
+
                   <View style={styles.paymentDetailRow}>
                     <Text style={[styles.paymentDetailLabel, { color: isDark ? '#ccc' : '#666' }]}>
                       Método de Pago:
@@ -1527,7 +1534,13 @@ export default function PagoScreen() {
                   </View>
 
                   <View style={[styles.paymentDetailRow, styles.totalRow]}>
-                    <Text style={[styles.paymentDetailLabel, styles.totalLabel, { color: isDark ? '#fff' : '#000' }]}>
+                    <Text
+                      style={[
+                        styles.paymentDetailLabel,
+                        styles.totalLabel,
+                        { color: isDark ? '#fff' : '#000' },
+                      ]}
+                    >
                       Total a Pagar:
                     </Text>
                     <Text style={[styles.paymentDetailValue, styles.totalValue]}>
@@ -1551,7 +1564,7 @@ export default function PagoScreen() {
                     style={[
                       styles.modalButton,
                       styles.cancelButton,
-                      { borderColor: isDark ? '#fff' : '#000' }
+                      { borderColor: isDark ? '#fff' : '#000' },
                     ]}
                     onPress={() => {
                       setShowPaymentConfirmation(false);
@@ -1567,7 +1580,7 @@ export default function PagoScreen() {
                     style={[
                       styles.modalButton,
                       styles.confirmButton,
-                      { opacity: loading ? 0.7 : 1 }
+                      { opacity: loading ? 0.7 : 1 },
                     ]}
                     onPress={() => {
                       setShowPaymentConfirmation(false);
@@ -1578,9 +1591,7 @@ export default function PagoScreen() {
                     {loading ? (
                       <ActivityIndicator size={20} color="#fff" />
                     ) : (
-                      <Text style={styles.confirmButtonText}>
-                        Confirmar Pago
-                      </Text>
+                      <Text style={styles.confirmButtonText}>Confirmar Pago</Text>
                     )}
                   </TouchableOpacity>
                 </View>
@@ -1611,7 +1622,9 @@ export default function PagoScreen() {
               </Text>
 
               {/* Información de la tarjeta */}
-              <View style={[styles.successCardInfo, { backgroundColor: isDark ? '#333' : '#f5f5f5' }]}>
+              <View
+                style={[styles.successCardInfo, { backgroundColor: isDark ? '#333' : '#f5f5f5' }]}
+              >
                 <MaterialIcons name="credit-card" size={24} color="#4CAF50" />
                 <Text style={[styles.successCardText, { color: isDark ? '#fff' : '#000' }]}>
                   {successModalData.cardInfo}
@@ -1620,7 +1633,12 @@ export default function PagoScreen() {
 
               {/* Información del pedido */}
               {successModalData.orderId && (
-                <View style={[styles.successOrderInfo, { backgroundColor: isDark ? '#1a1a1a' : '#f9f9f9' }]}>
+                <View
+                  style={[
+                    styles.successOrderInfo,
+                    { backgroundColor: isDark ? '#1a1a1a' : '#f9f9f9' },
+                  ]}
+                >
                   <Text style={[styles.successOrderLabel, { color: isDark ? '#ccc' : '#666' }]}>
                     Número de Pedido:
                   </Text>
@@ -1636,7 +1654,7 @@ export default function PagoScreen() {
                   style={[
                     styles.modalButton,
                     styles.successSecondaryButton,
-                    { borderColor: isDark ? '#444' : '#ddd' }
+                    { borderColor: isDark ? '#444' : '#ddd' },
                   ]}
                   onPress={() => {
                     setShowSuccessModal(false);
@@ -1654,13 +1672,16 @@ export default function PagoScreen() {
                   onPress={() => {
                     setShowSuccessModal(false);
                     // Redirigir a la tienda
-                    router.push('/(tabs)/tienda' as any);
+                    router.push('/(tabs)/inicio' as any);
                   }}
                 >
-                  <MaterialIcons name="shopping-cart" size={20} color="#fff" style={{ marginRight: 8 }} />
-                  <Text style={styles.successPrimaryButtonText}>
-                    Seguir Comprando
-                  </Text>
+                  <MaterialIcons
+                    name="shopping-cart"
+                    size={20}
+                    color="#fff"
+                    style={{ marginRight: 8 }}
+                  />
+                  <Text style={styles.successPrimaryButtonText}>Seguir Comprando</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1948,13 +1969,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#4CAF50',
   },
   modalButtonText: {
-    fontSize: 16,
+    fontSize: 14, // Más grande
     fontWeight: '600',
-  },
-  confirmButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    textAlign: 'center',
   },
   // Estilos para modal de confirmación de pago
   confirmationContainer: {
@@ -2080,24 +2097,35 @@ const styles = StyleSheet.create({
   },
   successModalActions: {
     gap: 12,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 12,
   },
   successSecondaryButton: {
     borderWidth: 1,
     backgroundColor: 'transparent',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
+    paddingVertical: 16, // Más alto para móviles
+    paddingHorizontal: 20, // Más ancho
+    minHeight: 48, // Alto mínimo
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
   },
   successPrimaryButton: {
     backgroundColor: '#4CAF50',
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
+    paddingVertical: 16, // Más alto para móviles
+    paddingHorizontal: 20, // Más ancho
+    minHeight: 48, // Alto mínimo
+    flex: 1,
   },
   successPrimaryButtonText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 18, // Más grande
     fontWeight: '600',
+    textAlign: 'center',
   },
 });

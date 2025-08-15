@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useRouter } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
   Alert,
@@ -119,19 +119,22 @@ const RegisterScreen: React.FC = () => {
     if (validateForm()) {
       try {
         // 🔧 CONFIGURACIÓN AUTOMÁTICA DE URL
-        let baseUrl = process.env.EXPO_PUBLIC_NGROK_URL || process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
-        
+        let baseUrl =
+          process.env.EXPO_PUBLIC_NGROK_URL ||
+          process.env.EXPO_PUBLIC_API_URL ||
+          'http://localhost:3000';
+
         // 🚨 FALLBACK URL SI LAS VARIABLES NO FUNCIONAN
         const FALLBACK_NGROK_URL = 'https://ee8f4b054d44.ngrok-free.app';
-        
+
         // 🌐 DETECCIÓN AUTOMÁTICA DE ENTORNO
         if (!process.env.EXPO_PUBLIC_NGROK_URL && !process.env.EXPO_PUBLIC_API_URL) {
           console.log('⚠️ Variables de entorno no disponibles en registro, usando fallback');
           baseUrl = FALLBACK_NGROK_URL;
         }
-        
+
         console.log('🔗 URL Base detectada en registro:', baseUrl);
-        
+
         // Separa los apellidos en paterno y materno
         const [apellidoPaterno, apellidoMaterno = ''] = formData.apellidos.split(' ');
         const userPayload = {
@@ -154,10 +157,10 @@ const RegisterScreen: React.FC = () => {
 
         const fullUrl = `${baseUrl}/api/user/register`;
         console.log('👤 Registrando usuario en:', fullUrl);
-        
+
         const response = await fetch(fullUrl, {
           method: 'POST',
-          headers: { 
+          headers: {
             'Content-Type': 'application/json',
             // 🔒 HEADERS PARA NGROK
             'ngrok-skip-browser-warning': 'true',
@@ -165,10 +168,10 @@ const RegisterScreen: React.FC = () => {
           },
           body: JSON.stringify(userPayload),
         });
-        
+
         const data = await response.json();
         console.log('📡 Response registro:', { status: response.status, ok: response.ok });
-        
+
         if (response.ok && data.token) {
           await AsyncStorage.setItem('token', data.token);
           Alert.alert('Registro exitoso', data.message || 'Usuario creado correctamente');
@@ -191,204 +194,220 @@ const RegisterScreen: React.FC = () => {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: themeColors.background }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <ScrollView
-        contentContainerStyle={styles.scrollContainer}
-        keyboardShouldPersistTaps="handled"
+    <>
+      <Stack.Screen
+        options={{
+          title: 'Registro de Usuario',
+          headerShown: true,
+        }}
+      />
+      <KeyboardAvoidingView
+        style={[styles.container, { backgroundColor: themeColors.background }]}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <View
-          style={[styles.contentContainer, isSmallScreen ? styles.columnLayout : styles.rowLayout]}
+        <ScrollView
+          contentContainerStyle={styles.scrollContainer}
+          keyboardShouldPersistTaps="handled"
         >
           <View
             style={[
-              styles.formContainer,
-              {
-                padding: isSmallScreen ? 24 : 40,
-                maxWidth: isSmallScreen ? '100%' : '50%',
-              },
+              styles.contentContainer,
+              isSmallScreen ? styles.columnLayout : styles.rowLayout,
             ]}
           >
-            <Image
-              source={require('../../assets/images/Logo1.png')}
+            <View
               style={[
-                styles.logo,
+                styles.formContainer,
                 {
-                  width: isSmallScreen ? '70%' : 300,
-                  height: isSmallScreen ? 150 : 300,
-                  marginBottom: isSmallScreen ? 20 : 0,
-                  marginTop: isSmallScreen ? 10 : -60,
+                  padding: isSmallScreen ? 24 : 40,
+                  maxWidth: isSmallScreen ? '100%' : '50%',
                 },
               ]}
-              resizeMode="contain"
-            />
-
-            <Text style={[styles.sectionTitle, { color: themeColors.text }]}>REGISTRO</Text>
-
-            {/* Campo Nombre */}
-            <View style={styles.fieldContainer}>
-              <Text style={[styles.label, { color: themeColors.labelText }]}>NOMBRE</Text>
-              <TextInput
-                style={[
-                  styles.inputField,
-                  {
-                    backgroundColor: themeColors.inputBackground,
-                    color: themeColors.text,
-                    borderColor: errors.nombre ? themeColors.error : themeColors.border,
-                  },
-                  errors.nombre && styles.inputError,
-                ]}
-                placeholder="Ingresa tu nombre"
-                placeholderTextColor={themeColors.placeholderText}
-                value={formData.nombre}
-                onChangeText={(text) => handleChange('nombre', text)}
-              />
-              {errors.nombre ? (
-                <Text style={[styles.errorMessage, { color: themeColors.error }]}>
-                  {errors.nombre}
-                </Text>
-              ) : null}
-            </View>
-
-            {/* Campo Apellidos */}
-            <View style={styles.fieldContainer}>
-              <Text style={[styles.label, { color: themeColors.labelText }]}>APELLIDOS</Text>
-              <TextInput
-                style={[
-                  styles.inputField,
-                  {
-                    backgroundColor: themeColors.inputBackground,
-                    color: themeColors.text,
-                    borderColor: errors.apellidos ? themeColors.error : themeColors.border,
-                  },
-                  errors.apellidos && styles.inputError,
-                ]}
-                placeholder="Ingresa tus apellidos"
-                placeholderTextColor={themeColors.placeholderText}
-                value={formData.apellidos}
-                onChangeText={(text) => handleChange('apellidos', text)}
-              />
-              {errors.apellidos ? (
-                <Text style={[styles.errorMessage, { color: themeColors.error }]}>
-                  {errors.apellidos}
-                </Text>
-              ) : null}
-            </View>
-
-            {/* Campo Teléfono */}
-            <View style={styles.fieldContainer}>
-              <Text style={[styles.label, { color: themeColors.labelText }]}>TELÉFONO</Text>
-              <TextInput
-                style={[
-                  styles.inputField,
-                  {
-                    backgroundColor: themeColors.inputBackground,
-                    color: themeColors.text,
-                    borderColor: errors.telefono ? themeColors.error : themeColors.border,
-                  },
-                  errors.telefono && styles.inputError,
-                ]}
-                placeholder="Ingresa tu teléfono"
-                placeholderTextColor={themeColors.placeholderText}
-                value={formData.telefono}
-                onChangeText={(text) => handleChange('telefono', text)}
-                keyboardType="phone-pad"
-              />
-              {errors.telefono ? (
-                <Text style={[styles.errorMessage, { color: themeColors.error }]}>
-                  {errors.telefono}
-                </Text>
-              ) : null}
-            </View>
-
-            {/* Campo Email */}
-            <View style={styles.fieldContainer}>
-              <Text style={[styles.label, { color: themeColors.labelText }]}>EMAIL</Text>
-              <TextInput
-                style={[
-                  styles.inputField,
-                  {
-                    backgroundColor: themeColors.inputBackground,
-                    color: themeColors.text,
-                    borderColor: errors.email ? themeColors.error : themeColors.border,
-                  },
-                  errors.email && styles.inputError,
-                ]}
-                placeholder="Ingresa tu email"
-                placeholderTextColor={themeColors.placeholderText}
-                value={formData.email}
-                onChangeText={(text) => handleChange('email', text)}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-              {errors.email ? (
-                <Text style={[styles.errorMessage, { color: themeColors.error }]}>
-                  {errors.email}
-                </Text>
-              ) : null}
-            </View>
-
-            {/* Campo Contraseña */}
-            <View style={styles.fieldContainer}>
-              <Text style={[styles.label, { color: themeColors.labelText }]}>CONTRASEÑA</Text>
-              <TextInput
-                style={[
-                  styles.inputField,
-                  {
-                    backgroundColor: themeColors.inputBackground,
-                    color: themeColors.text,
-                    borderColor: errors.password ? themeColors.error : themeColors.border,
-                  },
-                  errors.password && styles.inputError,
-                ]}
-                placeholder="Ingresa tu contraseña"
-                placeholderTextColor={themeColors.placeholderText}
-                value={formData.password}
-                onChangeText={(text) => handleChange('password', text)}
-                secureTextEntry
-              />
-              {errors.password ? (
-                <Text style={[styles.errorMessage, { color: themeColors.error }]}>
-                  {errors.password}
-                </Text>
-              ) : null}
-            </View>
-
-            {/* Botón de Registro */}
-            <TouchableOpacity
-              style={[styles.primaryButton, { backgroundColor: themeColors.buttonBackground }]}
-              onPress={handleRegister}
-            >
-              <Text style={[styles.buttonText, { color: themeColors.buttonText }]}>SIGUIENTE</Text>
-            </TouchableOpacity>
-
-            {/* Enlace a Login */}
-            <TouchableOpacity style={styles.linkContainer} onPress={handleLoginRedirect}>
-              <Text style={[styles.linkText, { color: themeColors.linkText }]}>
-                ¿YA TIENES CUENTA?{' '}
-                <Text style={[styles.boldLinkText, { color: themeColors.text }]}>
-                  INICIA SESIÓN
-                </Text>
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {!isSmallScreen && (
-            <View
-              style={[styles.imageContainer, { backgroundColor: isDarkMode ? '#222' : '#f5f5f5' }]}
             >
               <Image
-                source={require('../../assets/images/FOTO 3.jpg')}
-                style={styles.modelImage}
-                resizeMode="cover"
+                source={require('../../assets/images/Logo1.png')}
+                style={[
+                  styles.logo,
+                  {
+                    width: isSmallScreen ? '70%' : 300,
+                    height: isSmallScreen ? 150 : 300,
+                    marginBottom: isSmallScreen ? 20 : 0,
+                    marginTop: isSmallScreen ? 10 : -60,
+                  },
+                ]}
+                resizeMode="contain"
               />
+
+              <Text style={[styles.sectionTitle, { color: themeColors.text }]}>REGISTRO</Text>
+
+              {/* Campo Nombre */}
+              <View style={styles.fieldContainer}>
+                <Text style={[styles.label, { color: themeColors.labelText }]}>NOMBRE</Text>
+                <TextInput
+                  style={[
+                    styles.inputField,
+                    {
+                      backgroundColor: themeColors.inputBackground,
+                      color: themeColors.text,
+                      borderColor: errors.nombre ? themeColors.error : themeColors.border,
+                    },
+                    errors.nombre && styles.inputError,
+                  ]}
+                  placeholder="Ingresa tu nombre"
+                  placeholderTextColor={themeColors.placeholderText}
+                  value={formData.nombre}
+                  onChangeText={(text) => handleChange('nombre', text)}
+                />
+                {errors.nombre ? (
+                  <Text style={[styles.errorMessage, { color: themeColors.error }]}>
+                    {errors.nombre}
+                  </Text>
+                ) : null}
+              </View>
+
+              {/* Campo Apellidos */}
+              <View style={styles.fieldContainer}>
+                <Text style={[styles.label, { color: themeColors.labelText }]}>APELLIDOS</Text>
+                <TextInput
+                  style={[
+                    styles.inputField,
+                    {
+                      backgroundColor: themeColors.inputBackground,
+                      color: themeColors.text,
+                      borderColor: errors.apellidos ? themeColors.error : themeColors.border,
+                    },
+                    errors.apellidos && styles.inputError,
+                  ]}
+                  placeholder="Ingresa tus apellidos"
+                  placeholderTextColor={themeColors.placeholderText}
+                  value={formData.apellidos}
+                  onChangeText={(text) => handleChange('apellidos', text)}
+                />
+                {errors.apellidos ? (
+                  <Text style={[styles.errorMessage, { color: themeColors.error }]}>
+                    {errors.apellidos}
+                  </Text>
+                ) : null}
+              </View>
+
+              {/* Campo Teléfono */}
+              <View style={styles.fieldContainer}>
+                <Text style={[styles.label, { color: themeColors.labelText }]}>TELÉFONO</Text>
+                <TextInput
+                  style={[
+                    styles.inputField,
+                    {
+                      backgroundColor: themeColors.inputBackground,
+                      color: themeColors.text,
+                      borderColor: errors.telefono ? themeColors.error : themeColors.border,
+                    },
+                    errors.telefono && styles.inputError,
+                  ]}
+                  placeholder="Ingresa tu teléfono"
+                  placeholderTextColor={themeColors.placeholderText}
+                  value={formData.telefono}
+                  onChangeText={(text) => handleChange('telefono', text)}
+                  keyboardType="phone-pad"
+                />
+                {errors.telefono ? (
+                  <Text style={[styles.errorMessage, { color: themeColors.error }]}>
+                    {errors.telefono}
+                  </Text>
+                ) : null}
+              </View>
+
+              {/* Campo Email */}
+              <View style={styles.fieldContainer}>
+                <Text style={[styles.label, { color: themeColors.labelText }]}>EMAIL</Text>
+                <TextInput
+                  style={[
+                    styles.inputField,
+                    {
+                      backgroundColor: themeColors.inputBackground,
+                      color: themeColors.text,
+                      borderColor: errors.email ? themeColors.error : themeColors.border,
+                    },
+                    errors.email && styles.inputError,
+                  ]}
+                  placeholder="Ingresa tu email"
+                  placeholderTextColor={themeColors.placeholderText}
+                  value={formData.email}
+                  onChangeText={(text) => handleChange('email', text)}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+                {errors.email ? (
+                  <Text style={[styles.errorMessage, { color: themeColors.error }]}>
+                    {errors.email}
+                  </Text>
+                ) : null}
+              </View>
+
+              {/* Campo Contraseña */}
+              <View style={styles.fieldContainer}>
+                <Text style={[styles.label, { color: themeColors.labelText }]}>CONTRASEÑA</Text>
+                <TextInput
+                  style={[
+                    styles.inputField,
+                    {
+                      backgroundColor: themeColors.inputBackground,
+                      color: themeColors.text,
+                      borderColor: errors.password ? themeColors.error : themeColors.border,
+                    },
+                    errors.password && styles.inputError,
+                  ]}
+                  placeholder="Ingresa tu contraseña"
+                  placeholderTextColor={themeColors.placeholderText}
+                  value={formData.password}
+                  onChangeText={(text) => handleChange('password', text)}
+                  secureTextEntry
+                />
+                {errors.password ? (
+                  <Text style={[styles.errorMessage, { color: themeColors.error }]}>
+                    {errors.password}
+                  </Text>
+                ) : null}
+              </View>
+
+              {/* Botón de Registro */}
+              <TouchableOpacity
+                style={[styles.primaryButton, { backgroundColor: themeColors.buttonBackground }]}
+                onPress={handleRegister}
+              >
+                <Text style={[styles.buttonText, { color: themeColors.buttonText }]}>
+                  SIGUIENTE
+                </Text>
+              </TouchableOpacity>
+
+              {/* Enlace a Login */}
+              <TouchableOpacity style={styles.linkContainer} onPress={handleLoginRedirect}>
+                <Text style={[styles.linkText, { color: themeColors.linkText }]}>
+                  ¿YA TIENES CUENTA?{' '}
+                  <Text style={[styles.boldLinkText, { color: themeColors.text }]}>
+                    INICIA SESIÓN
+                  </Text>
+                </Text>
+              </TouchableOpacity>
             </View>
-          )}
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+
+            {!isSmallScreen && (
+              <View
+                style={[
+                  styles.imageContainer,
+                  { backgroundColor: isDarkMode ? '#222' : '#f5f5f5' },
+                ]}
+              >
+                <Image
+                  source={require('../../assets/images/FOTO 3.jpg')}
+                  style={styles.modelImage}
+                  resizeMode="cover"
+                />
+              </View>
+            )}
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </>
   );
 };
 

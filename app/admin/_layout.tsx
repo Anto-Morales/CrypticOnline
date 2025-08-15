@@ -1,17 +1,17 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Slot, useRouter } from 'expo-router';
+import { Slot, useRouter, useSegments } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-    Alert,
-    Modal,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    useColorScheme,
-    useWindowDimensions,
-    View,
+  Alert,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  useColorScheme,
+  useWindowDimensions,
+  View,
 } from 'react-native';
 
 export default function AdminLayout() {
@@ -21,7 +21,8 @@ export default function AdminLayout() {
   const [user, setUser] = useState<any>(null);
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const { width } = useWindowDimensions();
-  
+  const segments = useSegments();
+
   // Determinar si es móvil o desktop
   const isLargeScreen = width >= 768;
   const isMobile = width < 768;
@@ -35,14 +36,27 @@ export default function AdminLayout() {
       const savedUser = await AsyncStorage.getItem('user');
       if (savedUser) {
         const userData = JSON.parse(savedUser);
-        if (userData.role === 'ADMIN' || userData.id === 1) {
+        console.log(
+          '🔍 Verificando acceso admin para usuario:',
+          userData.email,
+          'Role:',
+          userData.role,
+          'AdminLevel:',
+          userData.adminLevel
+        );
+
+        // Permitir acceso si es admin (role) o tiene adminLevel definido
+        if (userData.role === 'admin' || userData.role === 'ADMIN' || userData.adminLevel) {
+          console.log('✅ Acceso admin concedido para:', userData.email);
           setUser(userData);
         } else {
+          console.log('❌ Acceso denegado para:', userData.email, 'Role:', userData.role);
           Alert.alert('Acceso Denegado', 'No tienes permisos de administrador', [
-            { text: 'OK', onPress: () => router.push('/(tabs)/inicio') }
+            { text: 'OK', onPress: () => router.push('/(tabs)/inicio') },
           ]);
         }
       } else {
+        console.log('❌ No hay usuario guardado en storage');
         router.push('/');
       }
     } catch (error) {
@@ -72,41 +86,56 @@ export default function AdminLayout() {
   }
 
   const menuItems = [
-    { 
-      icon: 'analytics-outline', 
-      label: 'Dashboard', 
+    {
+      icon: 'analytics-outline',
+      label: 'Dashboard',
       route: '/admin/dashboard',
-      color: themeColors.accent 
+      color: themeColors.accent,
     },
-    { 
-      icon: 'cube-outline', 
-      label: 'Productos', 
+    {
+      icon: 'cube-outline',
+      label: 'Productos',
       route: '/admin/products',
-      color: themeColors.success 
+      color: themeColors.success,
     },
-    { 
-      icon: 'receipt-outline', 
-      label: 'Órdenes', 
+    {
+      icon: 'receipt-outline',
+      label: 'Órdenes',
       route: '/admin/orders',
-      color: themeColors.warning 
+      color: themeColors.warning,
     },
-    { 
-      icon: 'people-outline', 
-      label: 'Usuarios', 
+    {
+      icon: 'people-outline',
+      label: 'Usuarios',
       route: '/admin/users',
-      color: themeColors.accent 
+      color: themeColors.accent,
     },
-    { 
-      icon: 'card-outline', 
-      label: 'Pagos', 
+    {
+      icon: 'card-outline',
+      label: 'Pagos',
       route: '/admin/payments',
-      color: themeColors.success 
+      color: themeColors.success,
     },
-    { 
-      icon: 'settings-outline', 
-      label: 'Configuración', 
+    {
+      icon: 'shield-checkmark-outline',
+      label: 'Gestión Admins',
+      route: '/admin/management',
+      color: themeColors.danger,
+      adminOnly: true, // Solo para administradores de nivel superior
+    },
+    {
+      icon: 'storefront-outline',
+      label: 'Configuración',
       route: '/admin/settings',
-      color: themeColors.textColor 
+      color: themeColors.textColor,
+    },
+    // Agregar nueva opción de Gestión de Admins al menú
+    {
+      icon: 'shield-outline',
+      label: 'Gestión de Admins',
+      route: '/admin/admin-management',
+      color: themeColors.warning,
+      adminOnly: true, // Solo para administradores de nivel superior
     },
   ];
 
@@ -131,51 +160,34 @@ export default function AdminLayout() {
 
   return (
     <View style={[styles.container, { backgroundColor: themeColors.background }]}>
-      {/* Header */}
-      <View style={[styles.header, { backgroundColor: themeColors.sidebarBg }]}>
-        {/* Mobile Menu Button */}
-        {isMobile && (
-          <TouchableOpacity 
-            style={styles.mobileMenuButton}
-            onPress={toggleSidebar}
-          >
-            <Ionicons name="menu" size={24} color={themeColors.sidebarText} />
-          </TouchableOpacity>
-        )}
-        
-        <Text style={[styles.headerTitle, { color: themeColors.sidebarText }]}>
-          {isMobile ? 'Admin' : 'Panel de Administrador'}
-        </Text>
-        <Text style={[styles.headerUser, { color: themeColors.sidebarText }]}>
-          {isMobile ? user.nombres?.split(' ')[0] : `${user.nombres} ${user.apellidoPaterno}`}
-        </Text>
-      </View>
-
       <View style={styles.content}>
-        {/* Desktop Sidebar */}
+        {/* Sidebar desktop */}
         {isLargeScreen && (
           <View style={[styles.sidebar, { backgroundColor: themeColors.sidebarBg }]}>
             <ScrollView>
-              {menuItems.map((item, index) => (
-                <TouchableOpacity
-                  key={index}
-                  style={styles.menuItem}
-                  onPress={() => handleNavigation(item.route)}
-                >
-                  <Ionicons 
-                    name={item.icon as any} 
-                    size={24} 
-                    color={item.color} 
-                  />
-                  <Text style={[styles.menuText, { color: themeColors.sidebarText }]}>
-                    {item.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-              
+              {menuItems
+                .filter(
+                  (item) => !item.adminOnly || ['SUPER_ADMIN', 'ADMIN'].includes(user?.adminLevel)
+                )
+                .map((item, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={styles.menuItem}
+                    onPress={() => handleNavigation(item.route)}
+                  >
+                    <Ionicons name={item.icon as any} size={24} color={item.color} />
+                    <Text style={[styles.menuText, { color: themeColors.sidebarText }]}>
+                      {item.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+
               {/* Logout */}
               <TouchableOpacity
-                style={[styles.menuItem, { marginTop: 30, borderTopWidth: 1, borderTopColor: '#444' }]}
+                style={[
+                  styles.menuItem,
+                  { marginTop: 30, borderTopWidth: 1, borderTopColor: '#444' },
+                ]}
                 onPress={async () => {
                   console.log('🚪 Admin cerrando sesión...');
                   await AsyncStorage.removeItem('token');
@@ -185,22 +197,40 @@ export default function AdminLayout() {
                 }}
               >
                 <Ionicons name="log-out-outline" size={24} color={themeColors.danger} />
-                <Text style={[styles.menuText, { color: themeColors.danger }]}>
-                  Cerrar Sesión
-                </Text>
+                <Text style={[styles.menuText, { color: themeColors.danger }]}>Cerrar Sesión</Text>
               </TouchableOpacity>
             </ScrollView>
           </View>
         )}
 
         {/* Main Content */}
-        <View style={[
-          styles.mainContent, 
-          { 
-            backgroundColor: themeColors.background,
-            padding: isMobile ? 10 : 20  // Menos padding en móvil
-          }
-        ]}>
+        <View
+          style={[
+            styles.mainContent,
+            {
+              backgroundColor: themeColors.background,
+              padding: isMobile ? 10 : 20, // Menos padding en móvil
+            },
+          ]}
+        >
+          {/* En móvil, mostrar el nombre del admin y el botón hamburguesa arriba del contenido */}
+          {isMobile && (
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: 4,
+              }}
+            >
+              <Text style={{ fontSize: 12, color: themeColors.textColor }}>
+                {user.nombres?.split(' ')[0]}
+              </Text>
+              <TouchableOpacity onPress={toggleSidebar} style={{ padding: 6 }}>
+                <Ionicons name="menu" size={24} color={themeColors.textColor} />
+              </TouchableOpacity>
+            </View>
+          )}
           <Slot />
         </View>
       </View>
@@ -227,26 +257,29 @@ export default function AdminLayout() {
 
               {/* Mobile Menu Items */}
               <ScrollView style={styles.mobileSidebarContent}>
-                {menuItems.map((item, index) => (
-                  <TouchableOpacity
-                    key={index}
-                    style={[styles.mobileMenuItem, { borderBottomColor: '#444' }]}
-                    onPress={() => handleNavigation(item.route)}
-                  >
-                    <Ionicons 
-                      name={item.icon as any} 
-                      size={24} 
-                      color={item.color} 
-                    />
-                    <Text style={[styles.mobileMenuText, { color: themeColors.sidebarText }]}>
-                      {item.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-                
+                {menuItems
+                  .filter(
+                    (item) => !item.adminOnly || ['SUPER_ADMIN', 'ADMIN'].includes(user?.adminLevel)
+                  )
+                  .map((item, index) => (
+                    <TouchableOpacity
+                      key={index}
+                      style={[styles.mobileMenuItem, { borderBottomColor: '#444' }]}
+                      onPress={() => handleNavigation(item.route)}
+                    >
+                      <Ionicons name={item.icon as any} size={24} color={item.color} />
+                      <Text style={[styles.mobileMenuText, { color: themeColors.sidebarText }]}>
+                        {item.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+
                 {/* Mobile Logout */}
                 <TouchableOpacity
-                  style={[styles.mobileMenuItem, { marginTop: 20, borderTopWidth: 1, borderTopColor: '#444' }]}
+                  style={[
+                    styles.mobileMenuItem,
+                    { marginTop: 20, borderTopWidth: 1, borderTopColor: '#444' },
+                  ]}
                   onPress={async () => {
                     console.log('🚪 Admin móvil cerrando sesión...');
                     await AsyncStorage.removeItem('token');

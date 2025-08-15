@@ -15,6 +15,8 @@ import {
   useColorScheme,
   View,
 } from 'react-native';
+import PaymentAlert from '../components/PaymentAlert';
+
 export const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
   // 🔧 CONFIGURACIÓN AUTOMÁTICA DE URL
   let baseUrl =
@@ -83,15 +85,31 @@ const HomeScreen = () => {
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [modal, setModal] = useState({
+    visible: false,
+    type: 'info',
+    title: '',
+    message: '',
+    onClose: () => {},
+    buttonText: 'OK',
+  });
 
-  // Cargar productos reales al iniciar
+  // Cargar productos reales al iniciar y refrescar periódicamente
   useEffect(() => {
     // Añadir un pequeño delay para evitar problemas de timing
     const timer = setTimeout(() => {
       loadProducts();
     }, 1000); // 1 segundo de delay
 
-    return () => clearTimeout(timer);
+    // Polling automático cada 5 segundos
+    const interval = setInterval(() => {
+      loadProducts();
+    }, 5000); // 5 segundos
+
+    return () => {
+      clearTimeout(timer);
+      clearInterval(interval);
+    };
   }, []);
 
   const loadProducts = async () => {
@@ -136,6 +154,11 @@ const HomeScreen = () => {
         setFeaturedProducts([]);
       }
     } catch (error) {
+      showModal(
+        'error',
+        'Error de conexión',
+        'No se pudo cargar los productos. Verifica tu conexión.'
+      );
       console.error('❌ Error de conexión desde inicio:', error);
       console.error('❌ Tipo de error:', error?.constructor?.name);
       console.error('❌ Mensaje de error:', error instanceof Error ? error.message : 'Unknown');
@@ -157,6 +180,23 @@ const HomeScreen = () => {
         imageUrl: product.imageUrl,
         stock: product.stock.toString(),
       },
+    });
+  };
+
+  const showModal = (
+    type: 'success' | 'error',
+    title: string,
+    message: string,
+    onClose?: () => void,
+    buttonText?: string
+  ) => {
+    setModal({
+      visible: true,
+      type,
+      title,
+      message,
+      onClose: onClose || (() => setModal({ ...modal, visible: false })),
+      buttonText: buttonText || 'OK',
     });
   };
 
@@ -361,6 +401,18 @@ const HomeScreen = () => {
           <Text style={styles.searchText}>Descubre más productos</Text>
         </View>
       </ScrollView>
+
+      <PaymentAlert
+        visible={modal.visible}
+        type={modal.type as any}
+        title={modal.title}
+        message={modal.message}
+        onPrimaryAction={() => {
+          setModal({ ...modal, visible: false });
+          modal.onClose && modal.onClose();
+        }}
+        primaryText={modal.buttonText}
+      />
     </View>
   );
 };
