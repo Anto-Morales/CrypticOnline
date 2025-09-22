@@ -31,7 +31,7 @@ const apiRequest = async (
   let baseUrl =
     process.env.EXPO_PUBLIC_NGROK_URL || process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
 
-  const FALLBACK_NGROK_URL = 'https://8024cfccc3d9.ngrok-free.app';
+  const FALLBACK_NGROK_URL = 'https://c0b354d3a10d.ngrok-free.app';
 
   if (!process.env.EXPO_PUBLIC_NGROK_URL && !process.env.EXPO_PUBLIC_API_URL) {
     console.log('⚠️ Variables de entorno no disponibles en admin management, usando fallback');
@@ -43,6 +43,7 @@ const apiRequest = async (
   const defaultHeaders = {
     'Content-Type': 'application/json',
     'ngrok-skip-browser-warning': 'true',
+    'User-Agent': 'CrypticOnline-Mobile-App',
     ...headers,
   };
 

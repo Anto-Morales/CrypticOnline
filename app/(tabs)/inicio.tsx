@@ -23,7 +23,7 @@ export const apiRequest = async (endpoint: string, options: RequestInit = {}) =>
     process.env.EXPO_PUBLIC_NGROK_URL || process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
 
   // 🚨 FALLBACK URL ACTUALIZADA
-  const FALLBACK_NGROK_URL = 'https://4a60176aa796.ngrok-free.app';
+  const FALLBACK_NGROK_URL = 'https://c0b354d3a10d.ngrok-free.app';
 
   // 🌐 DETECCIÓN AUTOMÁTICA DE ENTORNO
   if (!process.env.EXPO_PUBLIC_NGROK_URL && !process.env.EXPO_PUBLIC_API_URL) {

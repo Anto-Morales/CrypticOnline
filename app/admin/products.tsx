@@ -32,7 +32,7 @@ const apiRequest = async (
   
   // 🔧 USAR LA MISMA URL QUE EN INICIO.TSX
   let baseUrl = process.env.EXPO_PUBLIC_NGROK_URL || process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
-  const FALLBACK_NGROK_URL = 'https://4a60176aa796.ngrok-free.app';
+  const FALLBACK_NGROK_URL = 'https://c0b354d3a10d.ngrok-free.app';
   if (!process.env.EXPO_PUBLIC_NGROK_URL && !process.env.EXPO_PUBLIC_API_URL) baseUrl = FALLBACK_NGROK_URL;
   
   const url = `${baseUrl}${endpoint}`;
@@ -84,7 +84,7 @@ interface ProductStats {
 
 export default function AdminProducts() {
   const router = useRouter();
-  console.log('🏷️ ADMIN PRODUCTS: Renderizando...');
+  console.log(' ADMIN PRODUCTS: Renderizando...');
   
   // 🔍 DEBUG: Verificar variables de entorno al iniciar
   console.log('🔍 VARIABLES DE ENTORNO AL INICIAR:', {
@@ -585,7 +585,7 @@ export default function AdminProducts() {
     }
   };
 
-  // Función para eliminar producto con Firebase (nueva)
+  // Función para eliminar producto with Firebase (nueva)
   const deleteProductWithFirebase = async (product: Product) => {
     try {
       const token = await AsyncStorage.getItem('token');

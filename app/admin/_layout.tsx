@@ -72,6 +72,9 @@ export default function AdminLayout() {
     sidebarBg: isDark ? '#111' : '#343a40',
     sidebarText: '#fff',
     accent: '#007bff',
+    dash: '#00fbffff',
+    products: '#ff00c3ff',
+    admincolor: '#ff7300ff',
     success: '#28a745',
     warning: '#ffc107',
     danger: '#dc3545',
@@ -90,13 +93,13 @@ export default function AdminLayout() {
       icon: 'analytics-outline',
       label: 'Dashboard',
       route: '/admin/dashboard',
-      color: themeColors.accent,
+      color: themeColors.dash,
     },
     {
       icon: 'cube-outline',
       label: 'Productos',
       route: '/admin/products',
-      color: themeColors.success,
+      color: themeColors.products,
     },
     {
       icon: 'receipt-outline',
@@ -109,6 +112,12 @@ export default function AdminLayout() {
       label: 'Usuarios',
       route: '/admin/users',
       color: themeColors.accent,
+    },
+     {
+      icon: 'people-outline',
+      label: 'Administradores',
+      route: '/admin/admin-management',
+      color: themeColors.admincolor,
     },
     {
       icon: 'card-outline',

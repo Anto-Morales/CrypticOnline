@@ -7,10 +7,11 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  useColorScheme,
   useWindowDimensions,
   View,
 } from 'react-native';
-import { BarChart, LineChart } from 'react-native-chart-kit';
+import { useRouter } from 'expo-router';
 
 const apiRequest = async (
   endpoint: string,
@@ -40,6 +41,9 @@ const apiRequest = async (
 };
 
 export default function AdminDashboard() {
+  const router = useRouter();
+  const scheme = useColorScheme();
+  const isDark = scheme === 'dark';
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const [loading, setLoading] = useState(true);
@@ -52,17 +56,19 @@ export default function AdminDashboard() {
     todayOrders: 0,
     activeUsers: 0,
     activeProducts: 0,
-    newUsers: [],
-    topProducts: [],
-    bestProduct: null,
     outOfStock: 0,
   });
-  const [chartData, setChartData] = useState<any>({
-    usersByDay: { labels: [], data: [] },
-    salesByProduct: { labels: [], data: [] },
-    revenueByDay: { labels: [], data: [] },
-    ordersByStatus: { labels: [], data: [] },
-  });
+
+  const themeColors = {
+    background: isDark ? '#000' : '#f8f9fa',
+    cardBg: isDark ? '#111' : '#fff',
+    textColor: isDark ? '#fff' : '#000',
+    subText: isDark ? '#ccc' : '#666',
+    accent: '#007bff',
+    success: '#28a745',
+    warning: '#ffc107',
+    danger: '#dc3545',
+  };
 
   useEffect(() => {
     loadStats();
@@ -72,26 +78,27 @@ export default function AdminDashboard() {
     setLoading(true);
     try {
       const token = await AsyncStorage.getItem('token');
-      // Usuarios nuevos por día
+      
       const { data: userStats } = await apiRequest('/api/admin/users/stats', {
         method: 'GET',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
-      // Productos más vendidos
+      
       const { data: productsData } = await apiRequest('/api/admin/products/top', {
         method: 'GET',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
-      // Ingresos por día
+      
       const { data: paymentStats } = await apiRequest('/api/admin/payments/stats', {
         method: 'GET',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
-      // Órdenes por estado
+      
       const { data: orderStats } = await apiRequest('/api/admin/orders/stats', {
         method: 'GET',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
+
       setStats({
         users: userStats.totalUsers || 0,
         activeUsers: userStats.activeUsers || 0,
@@ -101,30 +108,10 @@ export default function AdminDashboard() {
         todayOrders: orderStats.todayOrders || 0,
         payments: paymentStats.totalTransactions || 0,
         todayRevenue: paymentStats.todayRevenue || 0,
-        newUsers: userStats.users?.slice(0, 5) || [],
-        topProducts: productsData.topProducts?.slice(0, 5) || [],
-        bestProduct: productsData.topProducts?.[0] || null,
         outOfStock: productsData.outOfStock || 0,
       });
-      setChartData({
-        usersByDay: {
-          labels: userStats.usersByDay?.map((d: any) => d.day) || [],
-          data: userStats.usersByDay?.map((d: any) => d.count) || [],
-        },
-        salesByProduct: {
-          labels: productsData.topProducts?.map((p: any) => p.nombre) || [],
-          data: productsData.topProducts?.map((p: any) => p.totalSold) || [],
-        },
-        revenueByDay: {
-          labels: paymentStats.revenueByDay?.map((d: any) => d.day) || [],
-          data: paymentStats.revenueByDay?.map((d: any) => d.amount) || [],
-        },
-        ordersByStatus: {
-          labels: orderStats.ordersByStatus?.map((d: any) => d.status) || [],
-          data: orderStats.ordersByStatus?.map((d: any) => d.count) || [],
-        },
-      });
     } catch (error) {
+      console.error('Error loading stats:', error);
       setStats({
         users: 0,
         products: 0,
@@ -134,184 +121,276 @@ export default function AdminDashboard() {
         todayOrders: 0,
         activeUsers: 0,
         activeProducts: 0,
-        newUsers: [],
-        topProducts: [],
-        bestProduct: null,
         outOfStock: 0,
-      });
-      setChartData({
-        usersByDay: { labels: [], data: [] },
-        salesByProduct: { labels: [], data: [] },
-        revenueByDay: { labels: [], data: [] },
-        ordersByStatus: { labels: [], data: [] },
       });
     } finally {
       setLoading(false);
     }
   };
 
-  const quickLinks = [
-    { label: 'Usuarios', icon: 'people-outline', screen: 'users', color: '#007bff' },
-    { label: 'Productos', icon: 'cube-outline', screen: 'products', color: '#28a745' },
-    { label: 'Órdenes', icon: 'receipt-outline', screen: 'orders', color: '#ffc107' },
-    { label: 'Pagos', icon: 'card-outline', screen: 'payments', color: '#17a2b8' },
-  ];
+  const StatCard = ({
+    title,
+    value,
+    icon,
+    color,
+    subtitle,
+  }: {
+    title: string;
+    value: string | number;
+    icon: string;
+    color: string;
+    subtitle?: string;
+  }) => (
+    <View style={[styles.statCard, { backgroundColor: themeColors.cardBg }]}>
+      <View style={[styles.statIcon, { backgroundColor: color }]}>
+        <Ionicons name={icon as any} size={24} color="#fff" />
+      </View>
+      <View style={styles.statContent}>
+        <Text style={[styles.statValue, { color: themeColors.textColor }]}>{value}</Text>
+        <Text style={[styles.statTitle, { color: themeColors.subText }]}>{title}</Text>
+        {subtitle && (
+          <Text style={[styles.statSubtitle, { color: themeColors.subText }]}>{subtitle}</Text>
+        )}
+      </View>
+    </View>
+  );
+
+  const AdminCard = ({
+    title,
+    icon,
+    color,
+    onPress,
+    description,
+  }: {
+    title: string;
+    icon: string;
+    color: string;
+    onPress: () => void;
+    description: string;
+  }) => (
+    <TouchableOpacity
+      style={[styles.adminCard, { backgroundColor: themeColors.cardBg }]}
+      onPress={onPress}
+    >
+      <View style={[styles.cardIcon, { backgroundColor: color }]}>
+        <Ionicons name={icon as any} size={24} color="#fff" />
+      </View>
+      <Text style={[styles.cardTitle, { color: themeColors.textColor }]}>{title}</Text>
+      <Text style={[styles.cardDescription, { color: themeColors.subText }]}>{description}</Text>
+    </TouchableOpacity>
+  );
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-      <View style={[styles.content, { padding: isMobile ? 10 : 20 }]}>
-        <Text style={[styles.title, { fontSize: isMobile ? 20 : 28 }]}>
-          Panel de Administración
-        </Text>
-        <Text style={[styles.subtitle, { fontSize: isMobile ? 14 : 18 }]}>
-          Dashboard visual y estratégico
-        </Text>
+    <ScrollView style={[styles.container, { backgroundColor: themeColors.background }]}>
+      <View style={[styles.content, { padding: isMobile ? 15 : 20 }]}>
+        <View style={styles.header}>
+          <Text style={[styles.title, { color: themeColors.textColor, fontSize: isMobile ? 24 : 28 }]}>
+            🛡️ Panel de Administración
+          </Text>
+          <Text style={[styles.subtitle, { color: themeColors.subText, fontSize: isMobile ? 14 : 16 }]}>
+            Gestiona tu tienda desde aquí
+          </Text>
+        </View>
+
         {loading ? (
-          <View style={{ marginVertical: 40 }}>
-            <ActivityIndicator size="large" color="#ffc107" />
-            <Text style={{ color: '#ffc107', marginTop: 10 }}>Cargando estadísticas...</Text>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={themeColors.accent} />
+            <Text style={[styles.loadingText, { color: themeColors.accent }]}>
+              Cargando estadísticas...
+            </Text>
           </View>
         ) : (
           <>
-            {/* Gráfico de usuarios nuevos por día */}
-            <Text style={styles.graphTitle}>Usuarios nuevos (última semana)</Text>
-            <BarChart
-              data={{
-                labels: chartData.usersByDay.labels,
-                datasets: [{ data: chartData.usersByDay.data }],
-              }}
-              width={width - 40}
-              height={220}
-              yAxisLabel=""
-              chartConfig={graphConfig}
-              style={styles.graph}
-            />
+            {/* Estadísticas Numéricas */}
+            <Text style={[styles.sectionTitle, { color: themeColors.textColor }]}>Estadísticas</Text>
+            <View style={styles.statsContainer}>
+              <StatCard
+                title="Total Usuarios"
+                value={stats.users}
+                icon="people-outline"
+                color={themeColors.accent}
+                subtitle={`${stats.activeUsers} activos`}
+              />
+              <StatCard
+                title="Total Productos"
+                value={stats.products}
+                icon="cube-outline"
+                color={themeColors.success}
+                subtitle={`${stats.outOfStock} sin stock`}
+              />
+              <StatCard
+                title="Total Órdenes"
+                value={stats.orders}
+                icon="receipt-outline"
+                color={themeColors.warning}
+                subtitle={`${stats.todayOrders} hoy`}
+              />
+              <StatCard
+                title="Transacciones"
+                value={stats.payments}
+                icon="card-outline"
+                color="#17a2b8"
+                subtitle={`$${stats.todayRevenue} hoy`}
+              />
+            </View>
 
-            {/* Gráfico de ventas por producto */}
-            <Text style={styles.graphTitle}>Ventas por producto (Top 5)</Text>
-            <BarChart
-              data={{
-                labels: chartData.salesByProduct.labels,
-                datasets: [{ data: chartData.salesByProduct.data }],
-              }}
-              width={width - 40}
-              height={220}
-              yAxisLabel=""
-              chartConfig={graphConfig}
-              style={styles.graph}
-            />
+            {/* Tarjetas de Administración */}
+            <Text style={[styles.sectionTitle, { color: themeColors.textColor }]}>Administración</Text>
+            <View style={styles.cardsContainer}>
+              <AdminCard
+                title="Productos"
+                icon="cube-outline"
+                color={themeColors.success}
+                description="Gestionar inventario y productos"
+                onPress={() => router.push('/admin/products')}
+              />
 
-            {/* Gráfico de ingresos por día */}
-            <Text style={styles.graphTitle}>Ingresos diarios (última semana)</Text>
-            <LineChart
-              data={{
-                labels: chartData.revenueByDay.labels,
-                datasets: [{ data: chartData.revenueByDay.data }],
-              }}
-              width={width - 40}
-              height={220}
-              yAxisLabel="$"
-              chartConfig={graphConfig}
-              style={styles.graph}
-            />
+              <AdminCard
+                title="Usuarios"
+                icon="people-outline"
+                color={themeColors.accent}
+                description="Administrar usuarios registrados"
+                onPress={() => router.push('/admin/users')}
+              />
 
-            {/* Gráfico de órdenes por estado */}
-            <Text style={styles.graphTitle}>Órdenes por estado</Text>
-            <BarChart
-              data={{
-                labels: chartData.ordersByStatus.labels,
-                datasets: [{ data: chartData.ordersByStatus.data }],
-              }}
-              width={width - 40}
-              height={180}
-              yAxisLabel=""
-              chartConfig={graphConfig}
-              style={styles.graph}
-            />
+              <AdminCard
+                title="Órdenes"
+                icon="receipt-outline"
+                color={themeColors.warning}
+                description="Ver y gestionar pedidos"
+                onPress={() => router.push('/admin/orders')}
+              />
+
+              <AdminCard
+                title="Administradores"
+                icon="shield-outline"
+                color={themeColors.danger}
+                description="Gestionar otros administradores"
+                onPress={() => router.push('/admin/admin-management')}
+              />
+            </View>
           </>
         )}
-        <Text style={[styles.sectionTitle, { fontSize: isMobile ? 16 : 20 }]}>Accesos Rápidos</Text>
-        <View style={[styles.quickLinks, { flexDirection: isMobile ? 'column' : 'row' }]}>
-          {quickLinks.map((link) => (
-            <TouchableOpacity
-              key={link.label}
-              style={[styles.quickLinkCard, { backgroundColor: link.color }]}
-              onPress={() => {
-                /* Navegación a la pantalla correspondiente */
-              }}
-            >
-              <Ionicons name={link.icon as any} size={28} color="#fff" />
-              <Text style={styles.quickLinkText}>{link.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
       </View>
     </ScrollView>
   );
 }
 
-const graphConfig = {
-  backgroundGradientFrom: '#181824',
-  backgroundGradientTo: '#181824',
-  color: (opacity = 1) => `rgba(255, 193, 7, ${opacity})`,
-  labelColor: (opacity = 1) => `rgba(255,255,255,${opacity})`,
-  barPercentage: 0.6,
-  decimalPlaces: 0,
-  style: { borderRadius: 16 },
-  propsForDots: { r: '5', strokeWidth: '2', stroke: '#ffc107' },
-};
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#181824',
-  },
-  contentContainer: {
-    flexGrow: 1,
   },
   content: {
     flex: 1,
+  },
+  header: {
+    marginBottom: 30,
     alignItems: 'center',
   },
   title: {
     fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 10,
+    marginBottom: 8,
     textAlign: 'center',
-    letterSpacing: 1,
-  },
-  subtitle: {
-    color: '#ffc107',
-    marginBottom: 20,
-    textAlign: 'center',
-    fontWeight: '500',
     letterSpacing: 0.5,
   },
-  graph: {
-    marginVertical: 16,
-    borderRadius: 16,
+  subtitle: {
+    textAlign: 'center',
+    fontWeight: '500',
   },
-  graphTitle: {
-    color: '#ffc107',
-    fontWeight: 'bold',
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginVertical: 40,
+  },
+  loadingText: {
+    marginTop: 10,
     fontSize: 16,
-    marginTop: 24,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 16,
+    marginTop: 8,
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 30,
+    gap: 10,
+  },
+  statCard: {
+    width: '48%',
+    padding: 16,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  statIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  statContent: {
+    flex: 1,
+  },
+  statValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 2,
+  },
+  statTitle: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  statSubtitle: {
+    fontSize: 10,
+    marginTop: 2,
+  },
+  cardsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  adminCard: {
+    width: '48%',
+    padding: 20,
+    borderRadius: 12,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  cardIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
     marginBottom: 8,
     textAlign: 'center',
   },
-  sectionTitle: {
-    color: '#fff',
-    fontWeight: 'bold',
-    marginTop: 36,
-    marginBottom: 14,
+  cardDescription: {
+    fontSize: 12,
     textAlign: 'center',
-    fontSize: 20,
-    letterSpacing: 0.5,
-  },
-  quickLinks: {
-    width: '100%',
-    gap: 18,
-    marginBottom: 36,
+    lineHeight: 16,
   },
   quickLinkCard: {
     flex: 1,

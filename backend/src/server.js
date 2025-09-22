@@ -150,16 +150,16 @@ app.get('/api/firebase/test', async (req, res) => {
 console.log('🔗 Registrando rutas...');
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productsRoutes);
-app.use('/api/simple-products', simpleProductsRoutes); // ✅ Asegurar que esta ruta esté registrada
-app.use('/api/payments', detectRetryMiddleware, paymentRoutes);
-app.use('/api/payment-cards', paymentCardsRoutes);
-app.use('/api/orders', orderRoutes);
-app.use('/api/user', userRoutes);
-app.use('/api/notifications', notificationRoutes);
-app.use('/api/payments', paymentsRoutes);
-app.use('/api/admin/payments', adminPaymentsRoutes);
-app.use('/api/admin/users', adminUsersRoutes);
-app.use('/api/admin/management', adminManagementRoutes);
+app.use('/api/simple-products', simpleProductsRoutes); // Rutas simples para pruebas
+app.use('/api/payments', detectRetryMiddleware, paymentRoutes); // Rutas completas de MercadoPago
+app.use('/api/payment-cards', paymentCardsRoutes); // 🃏 RUTAS DE TARJETAS DE PAGO
+app.use('/api/orders', orderRoutes); // 📦 RUTAS DE ÓRDENES (usando order.routes.js existente)
+app.use('/api/user', userRoutes); // NUEVA RUTA PARA USUARIO
+app.use('/api/notifications', notificationRoutes); // NUEVA RUTA PARA NOTIFICACIONES
+app.use('/api/payments', paymentsRoutes); // NUEVA RUTA PARA PAGOS
+app.use('/api/admin/payments', adminPaymentsRoutes); // Rutas de administración de pagos
+app.use('/api/admin/users', adminUsersRoutes); // Rutas de administración de usuarios
+app.use('/api/admin/management', adminManagementRoutes); // Rutas de gestión de administradores
 app.use(adminOrderRoutes);
 console.log('✅ Rutas registradas');
 

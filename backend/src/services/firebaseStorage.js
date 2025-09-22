@@ -1,5 +1,5 @@
-import { getStorage } from '../config/firebase.js';
 import { v4 as uuidv4 } from 'uuid';
+import { getStorage } from '../config/firebase.js';
 
 class FirebaseStorageService {
   constructor() {

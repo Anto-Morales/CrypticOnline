@@ -3,12 +3,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Stack, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+    useColorScheme,
 } from 'react-native';
 
 const STATUS_COLORS: Record<string, string> = {
@@ -77,6 +78,8 @@ export default function AdminOrders() {
     failed: 0,
   });
   const router = useRouter();
+  const scheme = useColorScheme();
+  const isDark = scheme === 'dark';
 
   useEffect(() => {
     fetchOrders();
@@ -122,8 +125,16 @@ export default function AdminOrders() {
   return (
     <>
       <Stack.Screen options={{ title: 'Órdenes', headerShown: true, headerBackTitle: 'Volver' }} />
-      <ScrollView style={styles.container} contentContainerStyle={styles.listContent}>
-        <Text style={styles.pageTitle}>Gestión de Órdenes</Text>
+      <ScrollView
+        style={[styles.container, { backgroundColor: isDark ? '#000' : '#f8f9fa' }]}
+        contentContainerStyle={styles.listContent}
+      >
+        <Text style={[styles.pageTitle, { color: isDark ? '#fff' : '#000' }]}>
+          📦 Gestión de Órdenes
+        </Text>
+        <Text style={[styles.subtitle, { color: isDark ? '#ccc' : '#666' }]}>
+          Próximamente: Administración de pedidos y órdenes
+        </Text>
         <View style={styles.statsRow}>
           <View style={[styles.statBox, { backgroundColor: '#007bff' }]}>
             {' '}
@@ -215,8 +226,9 @@ export default function AdminOrders() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
-    padding: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
   },
   loadingContainer: {
     flex: 1,
@@ -323,10 +335,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   pageTitle: {
-    color: '#fff',
     fontSize: 24,
     fontWeight: 'bold',
-    marginBottom: 18,
+    marginBottom: 10,
+  },
+  subtitle: {
+    fontSize: 16,
     textAlign: 'center',
   },
   statsRow: {
