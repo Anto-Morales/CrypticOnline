@@ -6,6 +6,10 @@ import express from 'express';
 // Database
 import prisma from './prisma/db.js';
 
+// Firebase Configuration
+import { initializeFirebase } from './config/firebase.js';
+import firebaseStorageService from './services/firebaseStorage.js';
+
 // Routes
 import authRoutes from './routes/auth.routes.js';
 import paymentRoutes from './routes/payment.routes.fixed.js'; // RESTAURADO
@@ -31,6 +35,30 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// 🔥 Inicializar Firebase al arrancar el servidor
+const initializeServices = async () => {
+  try {
+    console.log('🚀 Inicializando servicios...');
+    
+    // Inicializar Firebase
+    initializeFirebase();
+    console.log('✅ Firebase Admin SDK inicializado');
+    
+    // Test de conexión a Firebase Storage
+    const storageConnected = await firebaseStorageService.testConnection();
+    if (storageConnected) {
+      console.log('✅ Firebase Storage conectado correctamente');
+    } else {
+      console.error('❌ Error conectando a Firebase Storage');
+    }
+    
+  } catch (error) {
+    console.error('❌ Error inicializando servicios:', error);
+    // No hacer exit del proceso, continuar sin Firebase
+    console.log('⚠️ Continuando sin Firebase Storage...');
+  }
+};
 
 // Middleware
 app.use(cors());
@@ -90,20 +118,48 @@ const detectRetryMiddleware = (req, res, next) => {
   next();
 };
 
+// 🧪 ENDPOINT DE PRUEBA PARA FIREBASE STORAGE
+app.get('/api/firebase/test', async (req, res) => {
+  try {
+    console.log('🧪 Probando Firebase Storage...');
+    const connected = await firebaseStorageService.testConnection();
+    
+    res.json({
+      success: true,
+      connected,
+      message: connected ? 'Firebase Storage funcionando correctamente' : 'Error conectando a Firebase Storage',
+      timestamp: new Date().toISOString(),
+      config: {
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        bucket: process.env.FIREBASE_STORAGE_BUCKET,
+        hasPrivateKey: !!process.env.FIREBASE_PRIVATE_KEY,
+        hasClientEmail: !!process.env.FIREBASE_CLIENT_EMAIL
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error en test de Firebase:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error probando Firebase Storage',
+      error: error.message
+    });
+  }
+});
+
 // Use routes
 console.log('🔗 Registrando rutas...');
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productsRoutes);
-app.use('/api/simple-products', simpleProductsRoutes); // Rutas simples para pruebas
-app.use('/api/payments', detectRetryMiddleware, paymentRoutes); // Rutas completas de MercadoPago
-app.use('/api/payment-cards', paymentCardsRoutes); // 🃏 RUTAS DE TARJETAS DE PAGO
-app.use('/api/orders', orderRoutes); // 📦 RUTAS DE ÓRDENES (usando order.routes.js existente)
-app.use('/api/user', userRoutes); // NUEVA RUTA PARA USUARIO
-app.use('/api/notifications', notificationRoutes); // NUEVA RUTA PARA NOTIFICACIONES
-app.use('/api/payments', paymentsRoutes); // NUEVA RUTA PARA PAGOS
-app.use('/api/admin/payments', adminPaymentsRoutes); // Rutas de administración de pagos
-app.use('/api/admin/users', adminUsersRoutes); // Rutas de administración de usuarios
-app.use('/api/admin/management', adminManagementRoutes); // Rutas de gestión de administradores
+app.use('/api/simple-products', simpleProductsRoutes); // ✅ Asegurar que esta ruta esté registrada
+app.use('/api/payments', detectRetryMiddleware, paymentRoutes);
+app.use('/api/payment-cards', paymentCardsRoutes);
+app.use('/api/orders', orderRoutes);
+app.use('/api/user', userRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/payments', paymentsRoutes);
+app.use('/api/admin/payments', adminPaymentsRoutes);
+app.use('/api/admin/users', adminUsersRoutes);
+app.use('/api/admin/management', adminManagementRoutes);
 app.use(adminOrderRoutes);
 console.log('✅ Rutas registradas');
 
@@ -112,6 +168,11 @@ app.get('/', (req, res) => {
   res.json({
     message: 'API CrypticOnline funcionando',
     version: '1.0.0',
+    services: {
+      database: 'PostgreSQL',
+      storage: 'Firebase Storage',
+      payments: 'MercadoPago'
+    },
     endpoints: [
       'POST /api/auth/register',
       'POST /api/auth/login',
@@ -130,18 +191,33 @@ app.get('/', (req, res) => {
       'POST /api/orders',
       'GET /api/orders',
       'GET /api/orders/:id',
+      'GET /api/firebase/test'
     ],
   });
 });
 
 // Health check endpoint
-app.get('/api/health', (req, res) => {
+app.get('/api/health', async (req, res) => {
   console.log('💚 Health check solicitado');
+  
+  // Verificar estado de Firebase
+  let firebaseStatus = 'unknown';
+  try {
+    const connected = await firebaseStorageService.testConnection();
+    firebaseStatus = connected ? 'connected' : 'disconnected';
+  } catch (error) {
+    firebaseStatus = 'error';
+  }
+  
   res.json({
     status: 'OK',
     message: 'Servidor funcionando correctamente',
     timestamp: new Date().toISOString(),
     port: PORT,
+    services: {
+      server: 'running',
+      firebase: firebaseStatus
+    },
     routes: [
       '/api/auth/*',
       '/api/products/*',
@@ -151,6 +227,7 @@ app.get('/api/health', (req, res) => {
       '/api/orders/*',
       '/api/user/*',
       '/api/notifications/*',
+      '/api/firebase/*'
     ],
   });
 });
@@ -339,9 +416,22 @@ app.use((error, req, res, next) => {
   });
 });
 
-app.listen(PORT, () => {
-  console.log('🚀 ===================================');
-  console.log(`🚀 Servidor CrypticOnline iniciado`);
-  console.log(`📍 Puerto: ${PORT}`);
-  console.log(`🌐 URL: http://localhost:${PORT}`);
+// Inicializar servicios y arrancar servidor
+const startServer = async () => {
+  await initializeServices();
+  
+  app.listen(PORT, () => {
+    console.log('🚀 ===================================');
+    console.log(`🚀 Servidor CrypticOnline iniciado`);
+    console.log(`📍 Puerto: ${PORT}`);
+    console.log(`🌐 URL: http://localhost:${PORT}`);
+    console.log(`🔥 Firebase Storage: configurado`);
+    console.log(`🧪 Test Firebase: GET /api/firebase/test`);
+    console.log('🚀 ===================================');
+  });
+};
+
+startServer().catch(error => {
+  console.error('❌ Error iniciando servidor:', error);
+  process.exit(1);
 });

@@ -1,9 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as ImagePicker from 'expo-image-picker';
+import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Image,
   Modal,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -14,82 +19,38 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-// Create a simple API request function since apiRequest is not available
-const apiRequest = async (url: string, options: { method: string; body?: string }) => {
-  try {
-    // 🔧 HARDCODED URL PARA TESTING (temporal)
-    const HARDCODED_NGROK_URL = 'https://2667b7e4b7b2.ngrok-free.app';
-    
-    // 🔧 CONFIGURACIÓN DINÁMICA DE API URL
-    let baseUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
-    
-    // 🌐 PRIORIZAR NGROK URL SI ESTÁ DISPONIBLE
-    if (process.env.EXPO_PUBLIC_NGROK_URL) {
-      baseUrl = process.env.EXPO_PUBLIC_NGROK_URL;
-      console.log('🔗 Usando NGROK URL desde env:', baseUrl);
-    } else {
-      // 🚨 FALLBACK A URL HARDCODEADA
-      baseUrl = HARDCODED_NGROK_URL;
-      console.log('⚠️ Variables de entorno no funcionan, usando URL hardcodeada:', baseUrl);
-    }
-    
-    // 🌐 DETECCIÓN DE PLATAFORMA Y CONFIGURACIÓN AUTOMÁTICA
-    if (typeof window !== 'undefined') {
-      // Estamos en web (navegador)
-      console.log('🌐 Ejecutándose en WEB');
-    } else {
-      // Estamos en móvil (React Native)
-      console.log('📱 Ejecutándose en MÓVIL');
-      
-      // 🏠 FALLBACK A IP LOCAL SI NO HAY NGROK
-      if (!process.env.EXPO_PUBLIC_NGROK_URL && !process.env.EXPO_PUBLIC_API_URL) {
-        console.log('⚠️ Sin variables de entorno, manteniendo URL hardcodeada');
-      }
-    }
-    
-    const fullUrl = `${baseUrl}${url}`;
-    console.log('🌐 API Request to:', fullUrl);
-    console.log('📱 Platform:', typeof window !== 'undefined' ? 'WEB' : 'MOBILE');
-    console.log('🔍 Env vars disponibles:', {
-      EXPO_PUBLIC_API_URL: process.env.EXPO_PUBLIC_API_URL,
-      EXPO_PUBLIC_NGROK_URL: process.env.EXPO_PUBLIC_NGROK_URL
-    });
-    
-    const response = await fetch(fullUrl, {
-      method: options.method,
-      headers: {
-        'Content-Type': 'application/json',
-        // 🔒 AGREGAR HEADERS PARA NGROK SI ES NECESARIO
-        ...(baseUrl.includes('ngrok') && { 
-          'ngrok-skip-browser-warning': 'true',
-          'User-Agent': 'CrypticOnline-Mobile-App'
-        }),
-      },
-      body: options.body,
-    });
-    
-    if (!response.ok) {
-      console.error('❌ Response not OK:', {
-        status: response.status,
-        statusText: response.statusText,
-        url: fullUrl
-      });
-    }
-    
-    const data = await response.json();
-    console.log('✅ API Response:', { status: response.status, hasData: !!data });
-    
-    return { response, data };
-  } catch (error) {
-    console.error('❌ API Request failed:', {
-      error: error instanceof Error ? error.message : 'Unknown error',
-      url,
-      baseUrl: typeof window !== 'undefined' ? 'WEB' : 'MOBILE',
-      fullUrl: `${process.env.EXPO_PUBLIC_NGROK_URL || process.env.EXPO_PUBLIC_API_URL || 'HARDCODED_URL'}${url}`,
-      errorType: error?.constructor?.name
-    });
-    throw error;
-  }
+
+const apiRequest = async (
+  endpoint: string,
+  options: {
+    method?: string;
+    headers?: Record<string, string>;
+    body?: FormData | string;
+  } = {}
+) => {
+  const { method = 'GET', headers = {}, body } = options;
+  
+  // 🔧 USAR LA MISMA URL QUE EN INICIO.TSX
+  let baseUrl = process.env.EXPO_PUBLIC_NGROK_URL || process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+  const FALLBACK_NGROK_URL = 'https://4a60176aa796.ngrok-free.app';
+  if (!process.env.EXPO_PUBLIC_NGROK_URL && !process.env.EXPO_PUBLIC_API_URL) baseUrl = FALLBACK_NGROK_URL;
+  
+  const url = `${baseUrl}${endpoint}`;
+  const defaultHeaders = {
+    'ngrok-skip-browser-warning': 'true',
+    'User-Agent': 'CrypticOnline-Mobile-App',
+    ...headers,
+  };
+
+  const config: RequestInit = { method, headers: defaultHeaders };
+  if (body) config.body = body;
+
+  console.log('🔗 Admin API Request URL:', url);
+  console.log('📦 Admin Request headers:', defaultHeaders);
+
+  const response = await fetch(url, config);
+  const data = await response.json();
+  return { response, data };
 };
 
 interface Product {
@@ -122,6 +83,7 @@ interface ProductStats {
 }
 
 export default function AdminProducts() {
+  const router = useRouter();
   console.log('🏷️ ADMIN PRODUCTS: Renderizando...');
   
   // 🔍 DEBUG: Verificar variables de entorno al iniciar
@@ -169,6 +131,9 @@ export default function AdminProducts() {
     imagen: '',
     disponible: true
   });
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [loadingImage, setLoadingImage] = useState(false);
+  const [showImageModal, setShowImageModal] = useState(false);
 
   const themeColors = {
     background: isDark ? '#000' : '#f8f9fa',
@@ -227,7 +192,7 @@ export default function AdminProducts() {
           precio: product.price,
           stock: product.stock,
           categoria: product.category || 'Sin categoría',
-          imagen: product.imageUrl,
+          imagen: product.imageUrl, // 🔍 Asegurar que se mapee correctamente
           disponible: product.stock > 0,
           totalSold: 0, // Por ahora en 0
           totalRevenue: 0, // Por ahora en 0
@@ -236,6 +201,16 @@ export default function AdminProducts() {
 
         setProducts(adaptedProducts);
         console.log('✅ Productos cargados:', adaptedProducts.length);
+        
+        // 🔍 DEBUGGING: Verificar imágenes de Firebase en los productos
+        const productsWithImages = adaptedProducts.filter((p: Product) => p.imagen);
+        console.log('📸 Productos con imágenes:', productsWithImages.length);
+        productsWithImages.forEach((product: Product) => {
+          console.log(`🖼️ Producto "${product.nombre}" - Imagen: ${product.imagen}`);
+          if (product.imagen && (product.imagen.includes('firebase') || product.imagen.includes('storage.googleapis.com'))) {
+            console.log(`✅ FIREBASE: Imagen confirmada en Firebase Storage para "${product.nombre}"`);
+          }
+        });
       } else {
         console.error('❌ Error cargando productos:', {
           status: response.status,
@@ -299,6 +274,7 @@ export default function AdminProducts() {
       disponible: true
     });
     setSelectedProduct(null);
+    setSelectedImage(null); // Limpiar imagen
     setIsEditing(false);
     setShowProductModal(true);
   };
@@ -314,6 +290,7 @@ export default function AdminProducts() {
       disponible: product.disponible
     });
     setSelectedProduct(product);
+    setSelectedImage(null); // Limpiar imagen seleccionada para edición
     setIsEditing(true);
     setShowProductModal(true);
   };
@@ -322,6 +299,7 @@ export default function AdminProducts() {
     setShowProductModal(false);
     setSelectedProduct(null);
     setIsEditing(false);
+    setSelectedImage(null); // Limpiar imagen seleccionada
     setFormData({
       nombre: '',
       descripcion: '',
@@ -331,6 +309,320 @@ export default function AdminProducts() {
       imagen: '',
       disponible: true
     });
+  };
+
+  // Función separada para crear producto con Firebase
+  const createProductWithFirebase = async () => {
+    if (!selectedImage) {
+      Alert.alert('Error', 'Debes seleccionar una imagen del producto');
+      return;
+    }
+
+    // Validaciones adicionales
+    if (!formData.nombre.trim()) {
+      Alert.alert('Error', 'El nombre del producto es obligatorio');
+      return;
+    }
+    if (!formData.descripcion.trim()) {
+      Alert.alert('Error', 'La descripción del producto es obligatoria');
+      return;
+    }
+    if (!formData.precio || isNaN(parseFloat(formData.precio))) {
+      Alert.alert('Error', 'El precio debe ser un número válido');
+      return;
+    }
+    if (!formData.stock || isNaN(parseInt(formData.stock))) {
+      Alert.alert('Error', 'El stock debe ser un número válido');
+      return;
+    }
+
+    setLoadingImage(true);
+    try {
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        Alert.alert('Error', 'No se encontró token de autenticación');
+        return;
+      }
+
+      // Crear FormData para enviar la imagen a Firebase Storage
+      const formDataToSend = new FormData();
+      
+      // IMPORTANTE: Usar los nombres correctos que espera el backend
+      formDataToSend.append('name', formData.nombre.trim());
+      formDataToSend.append('description', formData.descripcion.trim());
+      formDataToSend.append('price', formData.precio.toString());
+      formDataToSend.append('stock', formData.stock.toString());
+      
+      // Agregar categoría si existe
+      if (formData.categoria) {
+        formDataToSend.append('category', formData.categoria);
+      }
+
+      // Configurar la imagen según la plataforma
+      if (Platform.OS === 'web') {
+        // En web, convertir blob a File si es necesario
+        if (selectedImage.startsWith('blob:')) {
+          try {
+            const response = await fetch(selectedImage);
+            const blob = await response.blob();
+            const file = new File([blob], `product-${Date.now()}.jpg`, { type: 'image/jpeg' });
+            formDataToSend.append('image', file);
+          } catch (blobError) {
+            console.error('❌ Error procesando blob:', blobError);
+            Alert.alert('Error', 'No se pudo procesar la imagen seleccionada');
+            return;
+          }
+        } else if (selectedImage.startsWith('http')) {
+          // Si es una URL de Object.createObjectURL
+          try {
+            const response = await fetch(selectedImage);
+            const blob = await response.blob();
+            const file = new File([blob], `product-${Date.now()}.jpg`, { type: 'image/jpeg' });
+            formDataToSend.append('image', file);
+          } catch (urlError) {
+            console.error('❌ Error procesando URL de objeto:', urlError);
+            Alert.alert('Error', 'No se pudo procesar la imagen seleccionada');
+            return;
+          }
+        } else {
+          // Fallback para web
+          const imageFile = {
+            uri: selectedImage,
+            type: 'image/jpeg',
+            name: `product-${Date.now()}.jpg`,
+          } as any;
+          formDataToSend.append('image', imageFile);
+        }
+      } else {
+        // En móvil, usar la URI directamente
+        const imageFile = {
+          uri: selectedImage,
+          type: 'image/jpeg',
+          name: `product-${Date.now()}.jpg`,
+        } as any;
+        formDataToSend.append('image', imageFile);
+      }
+
+      console.log('📤 Datos del producto a enviar a Firebase:', {
+        name: formData.nombre.trim(),
+        description: formData.descripcion.trim(),
+        price: formData.precio,
+        stock: formData.stock,
+        category: formData.categoria,
+        hasImage: !!selectedImage,
+        platform: Platform.OS,
+        imageType: selectedImage.startsWith('blob:') ? 'blob' : selectedImage.startsWith('http') ? 'object-url' : 'uri'
+      });
+
+      console.log('📤 Enviando producto con imagen a Firebase Storage...');
+      console.log('🔗 URL del endpoint:', `/api/products/create-with-firebase`);
+      console.log('🔑 Token presente:', !!token);
+      
+      // Configurar headers apropiados para cada plataforma
+      const headers: Record<string, string> = {
+        'Authorization': `Bearer ${token}`,
+        'ngrok-skip-browser-warning': 'true',
+      };
+
+      // En móvil, no establecer Content-Type manualmente para FormData
+      if (Platform.OS === 'web') {
+        // En web, dejar que el navegador establezca el Content-Type con boundary
+        // No establecer manualmente para FormData
+      }
+      
+      const { response, data } = await apiRequest('/api/products/create-with-firebase', {
+        method: 'POST',
+        headers,
+        body: formDataToSend,
+      });
+
+      console.log('📡 Respuesta completa del servidor:', { 
+        status: response.status, 
+        statusText: response.statusText,
+        ok: response.ok,
+        data 
+      });
+
+      if (response.ok) {
+        console.log('✅ Producto creado y imagen subida a Firebase:', data);
+        
+        // 🔍 DEBUGGING: Verificar que la imagen se guardó correctamente
+        if (data.product && data.product.imageUrl) {
+          console.log('🖼️ URL de imagen generada por Firebase:', data.product.imageUrl);
+          console.log('🔗 Imagen accesible en:', data.product.imageUrl);
+          
+          // Verificar que la URL es válida
+          if (data.product.imageUrl.includes('firebase') || data.product.imageUrl.includes('storage.googleapis.com')) {
+            console.log('✅ CONFIRMADO: Imagen guardada en Firebase Storage');
+          } else {
+            console.log('⚠️ ADVERTENCIA: La URL no parece ser de Firebase Storage');
+          }
+        } else {
+          console.log('❌ ERROR: No se recibió URL de imagen en la respuesta');
+        }
+        
+        Alert.alert(
+          'Éxito',
+          'Producto creado exitosamente e imagen guardada en Firebase Storage'
+        );
+        
+        closeModal();
+        setSelectedImage(null);
+        loadProducts();
+        loadStats();
+      } else {
+        console.error('❌ Error creando producto:', data);
+        Alert.alert('Error', data.error || 'No se pudo crear el producto');
+      }
+    } catch (error) {
+      console.error('❌ Error de conexión:', error);
+      Alert.alert('Error', 'Error de conexión. Verifica tu internet.');
+    } finally {
+      setLoadingImage(false);
+    }
+  };
+
+  // Función para actualizar producto con Firebase (nueva)
+  const updateProductWithFirebase = async () => {
+    if (!selectedProduct) return;
+
+    setLoadingImage(true);
+    try {
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        Alert.alert('Error', 'No se encontró token de autenticación');
+        return;
+      }
+
+      // Crear FormData para enviar la actualización
+      const formDataToSend = new FormData();
+      
+      // Agregar campos que han cambiado
+      if (formData.nombre.trim()) {
+        formDataToSend.append('name', formData.nombre.trim());
+      }
+      if (formData.descripcion.trim()) {
+        formDataToSend.append('description', formData.descripcion.trim());
+      }
+      if (formData.precio) {
+        formDataToSend.append('price', formData.precio.toString());
+      }
+      if (formData.stock) {
+        formDataToSend.append('stock', formData.stock.toString());
+      }
+      if (formData.categoria) {
+        formDataToSend.append('category', formData.categoria);
+      }
+
+      // Solo agregar imagen si se seleccionó una nueva
+      if (selectedImage) {
+        if (Platform.OS === 'web') {
+          // En web, convertir blob a File si es necesario
+          if (selectedImage.startsWith('blob:') || selectedImage.startsWith('http')) {
+            try {
+              const response = await fetch(selectedImage);
+              const blob = await response.blob();
+              const file = new File([blob], `product-update-${Date.now()}.jpg`, { type: 'image/jpeg' });
+              formDataToSend.append('image', file);
+            } catch (error) {
+              console.error('❌ Error procesando imagen en web:', error);
+              Alert.alert('Error', 'No se pudo procesar la imagen seleccionada');
+              return;
+            }
+          }
+        } else {
+          // En móvil, usar la URI directamente
+          const imageFile = {
+            uri: selectedImage,
+            type: 'image/jpeg',
+            name: `product-update-${Date.now()}.jpg`,
+          } as any;
+          formDataToSend.append('image', imageFile);
+        }
+      }
+
+      console.log('📝 Actualizando producto con Firebase Storage...');
+      console.log('🔗 URL del endpoint:', `/api/products/update-with-firebase/${selectedProduct.id}`);
+      
+      const headers: Record<string, string> = {
+        'Authorization': `Bearer ${token}`,
+        'ngrok-skip-browser-warning': 'true',
+      };
+      
+      const { response, data } = await apiRequest(`/api/products/update-with-firebase/${selectedProduct.id}`, {
+        method: 'PUT',
+        headers,
+        body: formDataToSend,
+      });
+
+      console.log('📡 Respuesta actualización:', { 
+        status: response.status, 
+        ok: response.ok,
+        data 
+      });
+
+      if (response.ok) {
+        console.log('✅ Producto actualizado exitosamente:', data);
+        
+        Alert.alert(
+          'Éxito',
+          'Producto actualizado exitosamente'
+        );
+        
+        closeModal();
+        setSelectedImage(null);
+        loadProducts();
+        loadStats();
+      } else {
+        console.error('❌ Error actualizando producto:', data);
+        Alert.alert('Error', data.error || 'No se pudo actualizar el producto');
+      }
+    } catch (error) {
+      console.error('❌ Error de conexión:', error);
+      Alert.alert('Error', 'Error de conexión. Verifica tu internet.');
+    } finally {
+      setLoadingImage(false);
+    }
+  };
+
+  // Función para eliminar producto con Firebase (nueva)
+  const deleteProductWithFirebase = async (product: Product) => {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        Alert.alert('Error', 'No se encontró token de autenticación');
+        return;
+      }
+
+      console.log('🗑️ Eliminando producto con Firebase Storage:', product.id);
+      
+      const headers: Record<string, string> = {
+        'Authorization': `Bearer ${token}`,
+        'ngrok-skip-browser-warning': 'true',
+      };
+      
+      const { response, data } = await apiRequest(`/api/products/delete-with-firebase/${product.id}`, {
+        method: 'DELETE',
+        headers,
+      });
+
+      console.log('📡 Respuesta eliminación:', { status: response.status, data });
+
+      if (response.ok) {
+        console.log('✅ Producto y imagen eliminados exitosamente');
+        loadProducts(); // Recargar lista
+        setShowDeleteModal(false);
+        setProductToDelete(null);
+        
+        Alert.alert('Éxito', 'Producto e imagen eliminados de Firebase Storage');
+      } else {
+        console.error('❌ Error eliminando:', data);
+        Alert.alert('Error', data.error || 'Error al eliminar');
+      }
+    } catch (error) {
+      console.error('❌ Error eliminando producto:', error);
+      Alert.alert('Error', 'Error de conexión');
+    }
   };
 
   const handleSaveProduct = async () => {
@@ -351,33 +643,47 @@ export default function AdminProducts() {
         return;
       }
 
+      // DECISIÓN: Usar Firebase Storage si hay imagen seleccionada O si es edición
+      if (selectedImage || isEditing) {
+        console.log('📤 Usando Firebase Storage...');
+        if (isEditing) {
+          await updateProductWithFirebase();
+        } else {
+          await createProductWithFirebase();
+        }
+        return;
+      }
+
+      // Fallback: Si no hay imagen nueva, usar API simple
       const productData = {
         nombre: formData.nombre.trim(),
         descripcion: formData.descripcion.trim(),
         precio: parseFloat(formData.precio),
         stock: parseInt(formData.stock),
         categoria: formData.categoria,
-        imagen: formData.imagen.trim()
+        imagen: formData.imagen || ''
       };
 
-      console.log('💾 Guardando producto:', productData);
+      console.log('💾 Guardando producto sin imagen nueva:', productData);
 
       let response, data;
 
       if (isEditing && selectedProduct) {
-        // Actualizar producto existente
+        // Actualizar producto existente sin nueva imagen
         console.log('📝 Actualizando producto ID:', selectedProduct.id);
         const result = await apiRequest(`/api/simple-products/${selectedProduct.id}`, {
           method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(productData),
         });
         response = result.response;
         data = result.data;
       } else {
         // Crear nuevo producto usando la API simple
-        console.log('➕ Creando nuevo producto');
+        console.log('➕ Creando nuevo producto sin imagen');
         const result = await apiRequest('/api/simple-products/create', {
           method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(productData),
         });
         response = result.response;
@@ -392,6 +698,7 @@ export default function AdminProducts() {
           `Producto ${isEditing ? 'actualizado' : 'creado'} correctamente`
         );
         closeModal();
+        setSelectedImage(null);
         loadProducts();
         loadStats();
       } else {
@@ -404,44 +711,42 @@ export default function AdminProducts() {
     }
   };
 
-  const handleDeleteProduct = (product: Product) => {
-    console.log('🗑️ Preparando eliminar producto:', product.nombre);
-    setProductToDelete(product);
-    setShowDeleteModal(true);
-  };
-
   const confirmDeleteProduct = async () => {
     if (!productToDelete) return;
     
-    try {
-      console.log('🗑️ Eliminando producto ID:', productToDelete.id);
-      const { response, data } = await apiRequest(`/api/simple-products/${productToDelete.id}`, {
-        method: 'DELETE',
-      });
+    // DECISIÓN: Siempre usar Firebase Storage para eliminación si el producto tiene imagen
+    if (productToDelete.imagen && (
+      productToDelete.imagen.includes('firebase') || 
+      productToDelete.imagen.includes('storage.googleapis.com')
+    )) {
+      console.log('🗑️ Eliminando producto con imagen de Firebase Storage');
+      await deleteProductWithFirebase(productToDelete);
+    } else {
+      // Usar API simple para productos sin imagen de Firebase
+      try {
+        console.log('🗑️ Eliminando producto ID:', productToDelete.id);
+        const { response, data } = await apiRequest(`/api/simple-products/${productToDelete.id}`, {
+          method: 'DELETE',
+        });
 
-      console.log('📡 Respuesta eliminación:', { status: response.status, data });
+        console.log('📡 Respuesta eliminación:', { status: response.status, data });
 
-      if (response.ok) {
-        console.log('✅ Producto eliminado exitosamente');
-        loadProducts(); // Recargar lista
-        setShowDeleteModal(false);
-        setProductToDelete(null);
-        
-        // Mostrar confirmación (opcional)
-        Alert.alert('Éxito', data.message || 'Producto eliminado');
-      } else {
-        console.error('❌ Error eliminando:', data);
-        Alert.alert('Error', data.error || 'Error al eliminar');
+        if (response.ok) {
+          console.log('✅ Producto eliminado exitosamente');
+          loadProducts(); // Recargar lista
+          setShowDeleteModal(false);
+          setProductToDelete(null);
+          
+          Alert.alert('Éxito', data.message || 'Producto eliminado');
+        } else {
+          console.error('❌ Error eliminando:', data);
+          Alert.alert('Error', data.error || 'Error al eliminar');
+        }
+      } catch (error) {
+        console.error('❌ Error eliminando producto:', error);
+        Alert.alert('Error', 'Error de conexión');
       }
-    } catch (error) {
-      console.error('❌ Error eliminando producto:', error);
-      Alert.alert('Error', 'Error de conexión');
     }
-  };
-
-  const cancelDeleteProduct = () => {
-    setShowDeleteModal(false);
-    setProductToDelete(null);
   };
 
   const getStockStatus = (stock: number) => {
@@ -490,13 +795,31 @@ export default function AdminProducts() {
         style={[styles.productCard, { backgroundColor: themeColors.cardBg }]}
         onPress={() => openEditModal(product)}
       >
-        {/* Product Image */}
+        {/* Product Image con mejor manejo de errores */}
         <View style={styles.productImageContainer}>
           {product.imagen ? (
-            <Image source={{ uri: product.imagen }} style={styles.productImage} />
+            <Image 
+              source={{ uri: product.imagen }} 
+              style={styles.productImage}
+              onError={(error) => {
+                console.error('❌ Error cargando imagen:', product.imagen, error);
+              }}
+              onLoad={() => {
+                if (product.imagen?.includes('storage.googleapis.com')) {
+                  console.log('✅ Imagen de Firebase cargada exitosamente:', product.nombre);
+                }
+              }}
+            />
           ) : (
             <View style={[styles.productImagePlaceholder, { backgroundColor: themeColors.inputBg }]}>
               <Ionicons name="image-outline" size={32} color={themeColors.subText} />
+            </View>
+          )}
+          
+          {/* Indicador de origen de imagen */}
+          {product.imagen?.includes('storage.googleapis.com') && (
+            <View style={styles.firebaseIndicator}>
+              <Ionicons name="cloud-done" size={12} color="#4285f4" />
             </View>
           )}
         </View>
@@ -569,6 +892,133 @@ export default function AdminProducts() {
         </View>
       </TouchableOpacity>
     );
+  };
+
+  // Solicitar permisos para acceder a la galería y cámara
+  const requestPermissions = async () => {
+    if (Platform.OS !== 'web') {
+      // Solicitar permisos de galería
+      const { status: mediaStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      // Solicitar permisos de cámara
+      const { status: cameraStatus } = await ImagePicker.requestCameraPermissionsAsync();
+      
+      if (mediaStatus !== 'granted' || cameraStatus !== 'granted') {
+        Alert.alert('Error', 'Se necesitan permisos para acceder a la galería y cámara');
+        return false;
+      }
+    }
+    return true;
+  };
+
+  // Seleccionar imagen de la galería
+  const pickImage = async () => {
+    try {
+      console.log('📷 Solicitando permisos...');
+      
+      // En web, usar input de archivo nativo
+      if (Platform.OS === 'web') {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.onchange = (event: any) => {
+          const file = event.target.files[0];
+          if (file) {
+            // En web, crear un object URL en lugar de usar FileReader
+            const imageUri = URL.createObjectURL(file);
+            setSelectedImage(imageUri);
+            console.log('✅ Imagen seleccionada en web (Object URL):', imageUri);
+            Alert.alert('Éxito', 'Imagen seleccionada correctamente');
+          }
+        };
+        input.click();
+        return;
+      }
+
+      // En móvil, usar expo-image-picker
+      const hasPermission = await requestPermissions();
+      if (!hasPermission) return;
+
+      console.log('📷 Abriendo galería...');
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+        base64: false, // No necesitamos base64
+      });
+
+      console.log('📷 Resultado de la galería:', result);
+
+      if (!result.canceled && result.assets && result.assets[0]) {
+        const imageUri = result.assets[0].uri;
+        setSelectedImage(imageUri);
+        console.log('✅ Imagen seleccionada:', imageUri);
+        Alert.alert('Éxito', 'Imagen seleccionada correctamente');
+      }
+    } catch (error) {
+      console.error('❌ Error seleccionando imagen:', error);
+      Alert.alert('Error', 'No se pudo seleccionar la imagen');
+    }
+  };
+
+  // Tomar foto con la cámara
+  const takePicture = async () => {
+    try {
+      console.log('📸 Solicitando permisos...');
+      const hasPermission = await requestPermissions();
+      if (!hasPermission) return;
+
+      console.log('📸 Abriendo cámara...');
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      console.log('📸 Resultado de la cámara:', result);
+
+      if (!result.canceled && result.assets && result.assets[0]) {
+        const imageUri = result.assets[0].uri;
+        setSelectedImage(imageUri);
+        console.log('✅ Foto tomada:', imageUri);
+        Alert.alert('Éxito', 'Foto tomada correctamente');
+      }
+    } catch (error) {
+      console.error('❌ Error tomando foto:', error);
+      Alert.alert('Error', 'No se pudo tomar la foto');
+    }
+  };
+
+  // Mostrar modal de selección de imagen
+  const showImageOptions = () => {
+    console.log('📷 Mostrando modal de selección de imagen...');
+    setShowImageModal(true);
+  };
+
+  // Función para seleccionar imagen desde el modal
+  const selectImageFromModal = (type: 'camera' | 'gallery') => {
+    console.log(`� Seleccionando desde: ${type}`);
+    setShowImageModal(false);
+    
+    // Pequeño delay para que el modal se cierre correctamente en móvil
+    setTimeout(() => {
+      if (type === 'camera') {
+        takePicture();
+      } else {
+        pickImage();
+      }
+    }, 100);
+  };
+
+  const handleDeleteProduct = (product: Product) => {
+    console.log('🗑️ Preparando eliminar producto:', product.nombre);
+    setProductToDelete(product);
+    setShowDeleteModal(true);
+  };
+
+  const cancelDeleteProduct = () => {
+    setShowDeleteModal(false);
+    setProductToDelete(null);
   };
 
   return (
@@ -811,9 +1261,71 @@ export default function AdminProducts() {
                   </ScrollView>
                 </View>
 
+                {/* Sección de imagen - MUY IMPORTANTE */}
+                <View style={styles.inputGroup}>
+                  <Text style={[styles.inputLabel, { color: themeColors.textColor, fontSize: 18, fontWeight: 'bold' }]}>
+                    📷 Imagen del Producto *
+                  </Text>
+                  <TouchableOpacity 
+                    style={[styles.imageUploadContainer, { borderColor: selectedImage ? '#28a745' : themeColors.borderColor }]} 
+                    onPress={() => {
+                      console.log('🎯 Botón de imagen presionado');
+                      console.log('📱 Platform.OS:', Platform.OS);
+                      console.log('📱 Modal será mostrado en:', Platform.OS === 'web' ? 'WEB' : 'MÓVIL');
+                      showImageOptions();
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    {selectedImage ? (
+                      <>
+                        <Image source={{ uri: selectedImage }} style={styles.uploadedImage} />
+                        <View style={styles.imageOverlay}>
+                          <Ionicons name="checkmark-circle" size={30} color="#28a745" />
+                          <Text style={styles.imageSelectedText}>¡Imagen seleccionada!</Text>
+                        </View>
+                      </>
+                    ) : formData.imagen ? (
+                      <>
+                        <Image source={{ uri: formData.imagen }} style={styles.uploadedImage} />
+                        <View style={styles.imageOverlay}>
+                          <Ionicons name="image" size={30} color="#ffc107" />
+                          <Text style={styles.imageSelectedText}>Imagen actual</Text>
+                        </View>
+                      </>
+                    ) : (
+                      <View style={[styles.imagePlaceholder, { backgroundColor: themeColors.inputBg, borderColor: themeColors.borderColor }]}>
+                        <Ionicons name="camera-outline" size={50} color={themeColors.subText} />
+                        <Text style={[styles.imagePlaceholderText, { color: themeColors.subText, fontSize: 16 }]}>
+                          Toca aquí para seleccionar imagen
+                        </Text>
+                        <Text style={[styles.imageHint, { color: '#ffc107' }]}>
+                          📤 Se guardará en Firebase Storage
+                        </Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                  
+                  {selectedImage && (
+                    <TouchableOpacity 
+                      style={[styles.changeImageButton, { marginTop: 10 }]} 
+                      onPress={() => {
+                        console.log('🔄 Cambiar imagen presionado');
+                        showImageOptions();
+                      }}
+                    >
+                      <Ionicons name="refresh-outline" size={16} color="#000" />
+                      <Text style={styles.changeImageText}>Cambiar imagen</Text>
+                    </TouchableOpacity>
+                  )}
+                  
+                  <Text style={[styles.imageHelpText, { color: themeColors.subText, fontSize: 12, marginTop: 8 }]}>
+                    💡 Tip: La imagen se optimizará automáticamente para mejor rendimiento
+                  </Text>
+                </View>
+
                 <View style={styles.inputGroup}>
                   <Text style={[styles.inputLabel, { color: themeColors.textColor }]}>
-                    URL de Imagen
+                    URL de Imagen (opcional)
                   </Text>
                   <TextInput
                     style={[styles.input, { 
@@ -821,7 +1333,7 @@ export default function AdminProducts() {
                       color: themeColors.textColor,
                       borderColor: themeColors.borderColor
                     }]}
-                    placeholder="https://..."
+                    placeholder="O ingresa una URL directa..."
                     placeholderTextColor={themeColors.subText}
                     value={formData.imagen}
                     onChangeText={(text) => setFormData({ ...formData, imagen: text })}
@@ -857,13 +1369,92 @@ export default function AdminProducts() {
                 <TouchableOpacity
                   style={[styles.modalButton, { backgroundColor: themeColors.success }]}
                   onPress={handleSaveProduct}
+                  disabled={loadingImage}
                 >
-                  <Text style={styles.modalButtonText}>
-                    {isEditing ? 'Actualizar' : 'Crear'}
-                  </Text>
+                  {loadingImage ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Text style={styles.modalButtonText}>
+                      {isEditing ? 
+                        (selectedImage ? 'Actualizar con Firebase' : 'Actualizar') : 
+                        (selectedImage ? 'Crear con Firebase' : 'Crear')
+                      }
+                    </Text>
+                  )}
                 </TouchableOpacity>
               </View>
             </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Image Selection Modal */}
+      <Modal
+        visible={showImageModal}
+        animationType={Platform.OS === 'ios' ? 'slide' : 'fade'}
+        transparent={true}
+        onRequestClose={() => {
+          console.log('📱 Modal de imagen cerrado por botón atrás');
+          setShowImageModal(false);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.imageModalContent, { backgroundColor: themeColors.cardBg }]}>
+            <View style={styles.imageModalHeader}>
+              <Text style={[styles.imageModalTitle, { color: themeColors.textColor }]}>
+                📷 Seleccionar Imagen
+              </Text>
+              <TouchableOpacity 
+                onPress={() => {
+                  console.log('❌ Cerrando modal desde X');
+                  setShowImageModal(false);
+                }}
+              >
+                <Ionicons name="close" size={24} color={themeColors.textColor} />
+              </TouchableOpacity>
+            </View>
+            
+            <Text style={[styles.imageModalMessage, { color: themeColors.subText }]}>
+              Elige cómo quieres agregar la imagen del producto
+            </Text>
+
+            <View style={styles.imageModalActions}>
+              <TouchableOpacity
+                style={[styles.imageModalButton, { backgroundColor: themeColors.accent }]}
+                onPress={() => {
+                  console.log('📸 Botón CÁMARA presionado');
+                  selectImageFromModal('camera');
+                }}
+              >
+                <Ionicons name="camera" size={32} color="#fff" />
+                <Text style={styles.imageModalButtonText}>Cámara</Text>
+                <Text style={styles.imageModalButtonSubtext}>Tomar foto</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.imageModalButton, { backgroundColor: themeColors.success }]}
+                onPress={() => {
+                  console.log('🖼️ Botón GALERÍA presionado');
+                  selectImageFromModal('gallery');
+                }}
+              >
+                <Ionicons name="images" size={32} color="#fff" />
+                <Text style={styles.imageModalButtonText}>Galería</Text>
+                <Text style={styles.imageModalButtonSubtext}>Elegir imagen</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.imageModalCancelButton, { backgroundColor: themeColors.inputBg }]}
+              onPress={() => {
+                console.log('❌ Botón CANCELAR presionado');
+                setShowImageModal(false);
+              }}
+            >
+              <Text style={[styles.imageModalCancelText, { color: themeColors.textColor }]}>
+                Cancelar
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -925,6 +1516,7 @@ export default function AdminProducts() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#000',
   },
   header: {
     flexDirection: 'row',
@@ -936,9 +1528,11 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 5,
+    color: '#fff',
   },
   pageSubtitle: {
     fontSize: 16,
+    color: '#ccc',
   },
   addButton: {
     flexDirection: 'row',
@@ -946,6 +1540,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     paddingVertical: 10,
     borderRadius: 8,
+    backgroundColor: '#28a745',
   },
   addButtonText: {
     color: '#fff',
@@ -965,6 +1560,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    backgroundColor: '#111',
   },
   statContent: {
     flexDirection: 'row',
@@ -974,13 +1570,16 @@ const styles = StyleSheet.create({
   statTitle: {
     fontSize: 14,
     marginBottom: 5,
+    color: '#ccc',
   },
   statValue: {
     fontSize: 20,
     fontWeight: 'bold',
+    color: '#fff',
   },
   statSubtitle: {
     fontSize: 12,
+    color: '#999',
   },
   statIcon: {
     width: 50,
@@ -988,6 +1587,7 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#007bff',
   },
   searchContainer: {
     flexDirection: 'row',
@@ -996,11 +1596,13 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 8,
     marginBottom: 15,
+    backgroundColor: '#222',
   },
   searchInput: {
     flex: 1,
     marginLeft: 10,
     fontSize: 16,
+    color: '#fff',
   },
   filtersContainer: {
     marginBottom: 20,
@@ -1011,10 +1613,13 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     marginRight: 10,
     borderWidth: 1,
+    borderColor: '#333',
+    backgroundColor: '#111',
   },
   filterText: {
     fontSize: 14,
     fontWeight: '500',
+    color: '#fff',
   },
   productsGrid: {
     gap: 15,
@@ -1032,6 +1637,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
     position: 'relative',
+    backgroundColor: '#111',
   },
   productImageContainer: {
     alignItems: 'center',
@@ -1048,6 +1654,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#222',
   },
   productInfo: {
     flex: 1,
@@ -1056,10 +1663,12 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     marginBottom: 5,
+    color: '#fff',
   },
   productDescription: {
     fontSize: 14,
     marginBottom: 10,
+    color: '#ccc',
   },
   productMeta: {
     flexDirection: 'row',
@@ -1070,11 +1679,13 @@ const styles = StyleSheet.create({
   productPrice: {
     fontSize: 20,
     fontWeight: 'bold',
+    color: '#28a745',
   },
   categoryBadge: {
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
+    backgroundColor: '#007bff',
   },
   categoryText: {
     color: '#fff',
@@ -1093,9 +1704,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     marginLeft: 5,
+    color: '#fff',
   },
   salesText: {
     fontSize: 12,
+    color: '#ccc',
   },
   productActions: {
     flexDirection: 'row',
@@ -1108,6 +1721,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 8,
     borderRadius: 6,
+    backgroundColor: '#007bff',
   },
   actionButtonText: {
     color: '#fff',
@@ -1133,10 +1747,11 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     marginTop: 15,
+    color: '#ccc',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1146,6 +1761,7 @@ const styles = StyleSheet.create({
     maxHeight: '90%',
     borderRadius: 12,
     padding: 20,
+    backgroundColor: '#222',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1156,33 +1772,39 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 20,
     fontWeight: 'bold',
+    color: '#fff',
   },
   formContainer: {
     marginBottom: 20,
   },
   inputGroup: {
-    marginBottom: 15,
+    marginBottom: 16,
   },
   inputLabel: {
     fontSize: 16,
     fontWeight: '500',
     marginBottom: 8,
+    color: '#fff',
   },
   input: {
-    borderWidth: 1,
+    backgroundColor: '#222',
+    color: '#fff',
     borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    padding: 12,
     fontSize: 16,
+    borderWidth: 1,
+    borderColor: '#333',
   },
   textArea: {
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
     height: 80,
     textAlignVertical: 'top',
+    backgroundColor: '#222',
+    color: '#fff',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: '#333',
   },
   inputRow: {
     flexDirection: 'row',
@@ -1196,10 +1818,13 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
+    borderColor: '#333',
+    backgroundColor: '#111',
   },
   categoryOptionText: {
     fontSize: 14,
     fontWeight: '500',
+    color: '#fff',
   },
   switchContainer: {
     flexDirection: 'row',
@@ -1210,6 +1835,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     paddingVertical: 8,
     borderRadius: 20,
+    backgroundColor: '#28a745',
   },
   switchText: {
     color: '#fff',
@@ -1224,6 +1850,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 8,
     alignItems: 'center',
+    backgroundColor: '#007bff',
   },
   modalButtonText: {
     color: '#fff',
@@ -1237,6 +1864,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 24,
     alignItems: 'center',
+    backgroundColor: '#222',
   },
   deleteModalHeader: {
     alignItems: 'center',
@@ -1247,12 +1875,14 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginTop: 12,
     textAlign: 'center',
+    color: '#fff',
   },
   deleteModalMessage: {
     fontSize: 16,
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: 24,
+    color: '#ccc',
   },
   deleteModalActions: {
     flexDirection: 'row',
@@ -1266,9 +1896,151 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     borderWidth: 1,
+    borderColor: '#333',
+    backgroundColor: '#28a745',
   },
   deleteModalButtonText: {
     fontWeight: 'bold',
     fontSize: 16,
+    color: '#fff',
+  },
+  // Estilos para la sección de imagen
+  imageUploadContainer: {
+    width: '100%',
+    height: 200,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#333',
+    borderStyle: 'dashed',
+    overflow: 'hidden',
+    marginBottom: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  uploadedImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  imagePlaceholder: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#222',
+    width: '100%',
+  },
+  imagePlaceholderText: {
+    color: '#666',
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  imageHint: {
+    color: '#ffc107',
+    fontSize: 12,
+    marginTop: 4,
+    fontStyle: 'italic',
+    textAlign: 'center',
+  },
+  changeImageButton: {
+    backgroundColor: '#ffc107',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignSelf: 'center',
+    marginBottom: 10,
+  },
+  changeImageText: {
+    color: '#000',
+    fontWeight: 'bold',
+    fontSize: 14,
+    marginLeft: 4,
+  },
+  imageOverlay: {
+    position: 'absolute',
+    bottom: 10,
+    right: 10,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    borderRadius: 8,
+    padding: 8,
+    alignItems: 'center',
+  },
+  imageSelectedText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginTop: 4,
+  },
+  imageHelpText: {
+    fontStyle: 'italic',
+    textAlign: 'center',
+  },
+  // Estilos para el modal de selección de imagen
+  imageModalContent: {
+    width: '85%',
+    maxWidth: 400,
+    borderRadius: 16,
+    padding: 24,
+    backgroundColor: '#222',
+  },
+  imageModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  imageModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  imageModalMessage: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 24,
+    color: '#ccc',
+  },
+  imageModalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  imageModalButton: {
+    flex: 1,
+    padding: 20,
+    borderRadius: 12,
+    alignItems: 'center',
+    backgroundColor: '#007bff',
+  },
+  imageModalButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
+    marginTop: 8,
+  },
+  imageModalButtonSubtext: {
+    color: '#fff',
+    fontSize: 12,
+    opacity: 0.8,
+    marginTop: 4,
+  },
+  imageModalCancelButton: {
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    backgroundColor: '#333',
+  },
+  imageModalCancelText: {
+    color: '#fff',
+    fontWeight: '500',
+  },
+  // Nuevo estilo para indicador de Firebase
+  firebaseIndicator: {
+    position: 'absolute',
+    top: 2,
+    left: 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 10,
+    padding: 2,
   },
 });
