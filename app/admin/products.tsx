@@ -1027,7 +1027,7 @@ export default function AdminProducts() {
       <View style={styles.header}>
         <View>
           <Text style={[styles.pageTitle, { color: themeColors.textColor }]}>
-            🏷️ Gestión de Productos
+            Gestión de Productos
           </Text>
           <Text style={[styles.pageSubtitle, { color: themeColors.subText }]}>
             {stats.totalProducts} productos • {stats.activeProducts} activos

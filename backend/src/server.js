@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import express from 'express';
 
+
 // Database
 import prisma from './prisma/db.js';
 
@@ -30,6 +31,13 @@ import adminUsersRoutes from './routes/admin.users.routes.js';
 // Rutas de gestión de administradores
 import adminManagementRoutes from './routes/admin.management.routes.js';
 import adminOrderRoutes from './routes/admin.order.routes.js';
+
+//Rutas para los pagos con criptomonedas
+import cryptoRoutes from "./routes/cryptoPayments.routes.js";
+import { startBlockchainService } from "./services/blockchain.service.js";
+
+// Rutas para el servicio de Envia
+import enviaRoutes from './routes/envia.routes.js';
 
 dotenv.config();
 
@@ -161,6 +169,8 @@ app.use('/api/admin/payments', adminPaymentsRoutes); // Rutas de administración
 app.use('/api/admin/users', adminUsersRoutes); // Rutas de administración de usuarios
 app.use('/api/admin/management', adminManagementRoutes); // Rutas de gestión de administradores
 app.use(adminOrderRoutes);
+app.use("/api/payments", cryptoRoutes);
+app.use('/api/envia', enviaRoutes);
 console.log('✅ Rutas registradas');
 
 // Root endpoint
@@ -420,7 +430,7 @@ app.use((error, req, res, next) => {
 const startServer = async () => {
   await initializeServices();
   
-  app.listen(PORT, () => {
+  app.listen(PORT, async () => {
     console.log('🚀 ===================================');
     console.log(`🚀 Servidor CrypticOnline iniciado`);
     console.log(`📍 Puerto: ${PORT}`);
@@ -428,6 +438,14 @@ const startServer = async () => {
     console.log(`🔥 Firebase Storage: configurado`);
     console.log(`🧪 Test Firebase: GET /api/firebase/test`);
     console.log('🚀 ===================================');
+
+     try {
+      await startBlockchainService();
+      console.log('✅ Servicio de blockchain iniciado correctamente');
+    } catch (err) {
+      console.error('❌ Error iniciando el servicio de blockchain:', err);
+    }
+
   });
 };
 
