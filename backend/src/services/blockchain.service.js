@@ -2,9 +2,13 @@
 import dotenv from "dotenv";
 dotenv.config();
 
+import fs from "fs";
+const usdtAbi = JSON.parse(fs.readFileSync(new URL("../abis/usdtAbi.json", import.meta.url)));
+
 import { ethers } from "ethers";
 import { PrismaClient } from "@prisma/client";
 
+const prisma = new PrismaClient();
 const HTTP_PROVIDER = process.env.POLYGON_RPC_URL;
 const WSS_PROVIDER = process.env.POLYGON_WSS_URL;
 const USDT_ADDRESS = process.env.USDT_CONTRACT_ADDRESS;
@@ -25,10 +29,22 @@ try {
   console.warn("No WebSocket provider available:", e.message);
   wsProvider = null;
 }
+// Crear contrato HTTP del token USDT para leer datos básicos (como decimals)
+
+let httpContract;
+if (HTTP_PROVIDER && USDT_ADDRESS) {
+  httpContract = new ethers.Contract(USDT_ADDRESS, usdtAbi, httpProvider);
+  console.log("✅ Contrato USDT inicializado correctamente");
+} else {
+  console.error("❌ No se pudo inicializar httpContract (faltan provider o address)");
+}
+
 
 // Contract instances
-const httpContract = new ethers.Contract(USDT_ADDRESS, ERC20_ABI, httpProvider);
-const wsContract = wsProvider ? new ethers.Contract(USDT_ADDRESS, ERC20_ABI, wsProvider) : null;
+const tokenContract = new ethers.Contract(USDT_ADDRESS, usdtAbi, httpProvider);
+
+//&const httpContract = new ethers.Contract(USDT_ADDRESS, ERC20_ABI, httpProvider);
+const wsContract = wsProvider ? new ethers.Contract(USDT_ADDRESS, usdtAbi, wsProvider) : null;
 
 let tokenDecimalsCache = null;
 
@@ -52,7 +68,7 @@ async function getTokenDecimals() {
  */
 async function markPaymentConfirmed(paymentId, txHash, amount, blockNumber) {
   try {
-    await PrismaClient.cryptoPayment.update({
+    await prisma.cryptoPayment.update({
       where: { id: paymentId },
       data: {
         status: "CONFIRMED",
@@ -78,7 +94,7 @@ async function handleTransferEvent(from, to, value, event) {
     const valueHuman = Number(ethers.formatUnits(value, decimals)); // p. ej. 50.0
 
     // Buscar pagos pendientes con la dirección 'to'
-    const pendingPayments = await PrismaClient.cryptoPayment.findMany({
+    const pendingPayments = await prisma.cryptoPayment.findMany({
       where: {
         address: to.toLowerCase(),
         status: "PENDING"
@@ -129,7 +145,7 @@ async function setupEventListeners() {
   }
 
   // Recuperar pagos pendientes y crear filtros
-  const pendings = await PrismaClient.cryptoPayment.findMany({
+  const pendings = await prisma.cryptoPayment.findMany({
     where: { status: "PENDING" }
   });
 
@@ -167,7 +183,7 @@ async function pollingLoop() {
 
   while (true) {
     try {
-      const pendings = await PrismaClient.cryptoPayment.findMany({
+      const pendings = await prisma.cryptoPayment.findMany({
         where: { status: "PENDING" }
       });
 

@@ -441,7 +441,7 @@ const startServer = async () => {
 
      try {
       await startBlockchainService();
-      console.log('✅ Servicio de blockchain iniciado correctamente');
+      console.log('Servicio de blockchain iniciado correctamente');
     } catch (err) {
       console.error('❌ Error iniciando el servicio de blockchain:', err);
     }
