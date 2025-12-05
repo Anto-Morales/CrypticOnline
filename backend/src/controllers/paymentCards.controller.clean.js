@@ -538,9 +538,5 @@ const deletePaymentCard = async (req, res) => {
 
 // Exportar todas las funciones
 export {
-  getPaymentCards,
-  getDefaultCard,
-  addPaymentCard,
-  setDefaultCard,
-  deletePaymentCard
+    addPaymentCard, deletePaymentCard, getDefaultCard, getPaymentCards, setDefaultCard
 };
