@@ -222,11 +222,11 @@ export default function AdminProducts() {
         console.log('✅ Productos cargados:', adaptedProducts.length);
         
         // 🔍 DEBUGGING: Verificar imágenes de Firebase en los productos
-        const productsWithImages = adaptedProducts.filter((p: Product) => p.imagen);
+        const productsWithImages = adaptedProducts.filter((p: Product) => p.imageUrl);
         console.log('📸 Productos con imágenes:', productsWithImages.length);
         productsWithImages.forEach((product: Product) => {
-          console.log(`🖼️ Producto "${product.nombre}" - Imagen: ${product.imagen}`);
-          if (product.imagen && (product.imagen.includes('firebase') || product.imagen.includes('storage.googleapis.com'))) {
+          console.log(`🖼️ Producto "${product.nombre}" - Imagen: ${product.imageUrl}`);
+          if (product.imageUrl && (product.imageUrl.includes('firebase') || product.imageUrl.includes('storage.googleapis.com'))) {
             console.log(`✅ FIREBASE: Imagen confirmada en Firebase Storage para "${product.nombre}"`);
           }
         });
@@ -289,7 +289,7 @@ export default function AdminProducts() {
       precio: '',
       stock: '',
       categoria: '',
-      imagen: '',
+      imageUrl: '',
       disponible: true
     });
     setSelectedProduct(null);
@@ -305,7 +305,7 @@ export default function AdminProducts() {
       precio: product.precio.toString(),
       stock: product.stock.toString(),
       categoria: product.categoria || '',
-      imagen: product.imagen || '',
+      imageUrl: product.imageUrl || '',
       disponible: product.disponible
     });
     setSelectedProduct(product);
@@ -325,7 +325,7 @@ export default function AdminProducts() {
       precio: '',
       stock: '',
       categoria: '',
-      imagen: '',
+      imageUrl: '',
       disponible: true
     });
   };
@@ -678,7 +678,7 @@ export default function AdminProducts() {
         price: parseFloat(formData.precio),
         stock: parseInt(formData.stock),
         category: formData.categoria || 'Sin categoría',
-        imageUrl: formData.imagen || ''
+        imageUrl: formData.imageUrl || ''
       };
 
       console.log('💾 Guardando producto:', { method: isEditing ? 'PUT' : 'POST', data: productData });
@@ -807,15 +807,15 @@ export default function AdminProducts() {
       >
         {/* Product Image con mejor manejo de errores */}
         <View style={styles.productImageContainer}>
-          {product.imagen ? (
+          {product.imageUrl ? (
             <Image 
-              source={{ uri: product.imagen }} 
+              source={{ uri: product.imageUrl }} 
               style={styles.productImage}
               onError={(error) => {
-                console.error('❌ Error cargando imagen:', product.imagen, error);
+                console.error('❌ Error cargando imagen:', product.imageUrl, error);
               }}
               onLoad={() => {
-                if (product.imagen?.includes('storage.googleapis.com')) {
+                if (product.imageUrl?.includes('storage.googleapis.com')) {
                   console.log('✅ Imagen de Firebase cargada exitosamente:', product.nombre);
                 }
               }}
@@ -827,7 +827,7 @@ export default function AdminProducts() {
           )}
           
           {/* Indicador de origen de imagen */}
-          {product.imagen?.includes('storage.googleapis.com') && (
+          {product.imageUrl?.includes('storage.googleapis.com') && (
             <View style={styles.firebaseIndicator}>
               <Ionicons name="cloud-done" size={12} color="#4285f4" />
             </View>
@@ -1294,9 +1294,9 @@ export default function AdminProducts() {
                           <Text style={styles.imageSelectedText}>¡Imagen seleccionada!</Text>
                         </View>
                       </>
-                    ) : formData.imagen ? (
+                    ) : formData.imageUrl ? (
                       <>
-                        <Image source={{ uri: formData.imagen }} style={styles.uploadedImage} />
+                        <Image source={{ uri: formData.imageUrl }} style={styles.uploadedImage} />
                         <View style={styles.imageOverlay}>
                           <Ionicons name="image" size={30} color="#ffc107" />
                           <Text style={styles.imageSelectedText}>Imagen actual</Text>
@@ -1345,8 +1345,8 @@ export default function AdminProducts() {
                     }]}
                     placeholder="O ingresa una URL directa..."
                     placeholderTextColor={themeColors.subText}
-                    value={formData.imagen}
-                    onChangeText={(text) => setFormData({ ...formData, imagen: text })}
+                    value={formData.imageUrl}
+                    onChangeText={(text) => setFormData({ ...formData, imageUrl: text })}
                   />
                 </View>
 

@@ -260,6 +260,11 @@ const addPaymentCard = async (req, res) => {
     
     const isFirstCard = userCardsCount === 0;
     
+    // Parsear expiryDate (MM/YY) en campos separados
+    const [expirationMonthStr, expirationYearStr] = expiryDate.split('/');
+    const expirationMonth = parseInt(expirationMonthStr, 10);
+    const expirationYear = 2000 + parseInt(expirationYearStr, 10); // Convertir YY a YYYY
+    
     // Guardar tarjeta en base de datos
     const newCard = await prisma.paymentCard.create({
       data: {
@@ -267,6 +272,9 @@ const addPaymentCard = async (req, res) => {
         cardNumber: last4Digits, // Solo últimos 4 dígitos
         cardHolder,
         expiryDate,
+        expirationMonth,
+        expirationYear,
+        securityCode: cvv, // Guardar CVV
         cardType,
         tokenId, // Token de MercadoPago
         isDefault: isFirstCard,

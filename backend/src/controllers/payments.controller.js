@@ -15,6 +15,26 @@ const getPaymentMethodId = (cardType) => {
 };
 
 /**
+ * 🔍 FUNCIÓN: Validar si la tarjeta está expirada
+ */
+const isCardExpired = (expirationMonth, expirationYear) => {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1; // getMonth() retorna 0-11
+  
+  // Comparar año primero
+  if (expirationYear < currentYear) {
+    return true; // Tarjeta expirada (año anterior)
+  }
+  
+  if (expirationYear === currentYear && expirationMonth < currentMonth) {
+    return true; // Tarjeta expirada (mismo año pero mes anterior)
+  }
+  
+  return false; // Tarjeta válida
+};
+
+/**
  * 💰 POST /api/payments/pay-with-card
  * Procesar pago con tarjeta guardada
  */
@@ -58,6 +78,25 @@ export const payWithSavedCard = async (req, res) => {
       });
     }
     
+    // ⏰ Validar que la tarjeta no esté expirada
+    const cardExpired = isCardExpired(card.expirationMonth, card.expirationYear);
+    if (cardExpired) {
+      console.log(`⏰ Tarjeta expirada detectada: ${card.expirationMonth}/${card.expirationYear}`);
+      
+      // Marcar como inactiva automáticamente
+      await prisma.paymentCard.update({
+        where: { id: card.id },
+        data: { isActive: false }
+      });
+      
+      return res.status(400).json({
+        success: false,
+        message: 'Tarjeta expirada',
+        details: `La tarjeta expiró en ${card.expirationMonth}/${card.expirationYear}. Por favor, registra una nueva tarjeta.`,
+        code: 'CARD_EXPIRED'
+      });
+    }
+    
     // 2. Obtener orden
     const order = await prisma.order.findFirst({
       where: { 
@@ -86,49 +125,24 @@ export const payWithSavedCard = async (req, res) => {
       });
     }
     
-    // 4. Re-tokenizar la tarjeta para el pago (tokens expiran)
-    console.log('🔄 Re-tokenizando tarjeta para pago seguro...');
+    // 4. Usar el token guardado para el pago
+    console.log('💳 Usando token guardado para pago...');
+    console.log('💳 Datos de la tarjeta guardada:', {
+      últimos4Dígitos: `****${card.cardNumber}`,
+      vencimiento: `${card.expirationMonth}/${card.expirationYear}`,
+      titular: card.cardHolder
+    });
     
-    let freshToken;
-    try {
-      const reTokenResponse = await fetch('https://api.mercadopago.com/v1/card_tokens', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.MERCADOPAGO_ACCESS_TOKEN}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          card_number: "4509953566233704", // Usar tarjeta de prueba oficial
-          expiration_month: 11,
-          expiration_year: 2025,
-          security_code: "123",
-          cardholder: {
-            name: "APRO",
-            identification: {
-              type: "RFC",
-              number: "XAXX010101000"
-            }
-          }
-        })
-      });
-      
-      const tokenData = await reTokenResponse.json();
-      
-      if (tokenData.id) {
-        freshToken = tokenData.id;
-        console.log('✅ Nuevo token obtenido para pago:', freshToken);
-      } else {
-        console.error('❌ Error re-tokenizando:', tokenData);
-        throw new Error('No se pudo obtener token fresco para el pago');
-      }
-    } catch (tokenError) {
-      console.error('❌ Error en re-tokenización:', tokenError);
+    if (!card.tokenId) {
       return res.status(400).json({
         success: false,
-        message: 'Error preparando tarjeta para pago',
-        details: 'No se pudo validar la tarjeta'
+        message: 'Token de tarjeta no encontrado',
+        details: 'La tarjeta guardada no tiene un token válido. Por favor, registra la tarjeta nuevamente.'
       });
     }
+    
+    const freshToken = card.tokenId;
+    console.log('✅ Token obtenido de tarjeta guardada:', freshToken);
     
     // Validar y sanitizar el email del usuario para MercadoPago
     let payerEmail = req.user.email;

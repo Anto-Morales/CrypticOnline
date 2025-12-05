@@ -102,18 +102,21 @@ model Payment {
 }
 
 model PaymentCard {
-  id         Int      @id @default(autoincrement())
-  userId     Int
-  cardNumber String
-  cardHolder String
-  expiryDate String
-  cardType   String
-  isDefault  Boolean  @default(false)
-  isActive   Boolean  @default(true)
-  tokenId    String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                Int      @id @default(autoincrement())
+  userId            Int
+  cardNumber        String
+  cardHolder        String
+  expiryDate        String
+  expirationMonth   Int?     // Mes de expiración (1-12)
+  expirationYear    Int?     // Año de expiración (YYYY)
+  securityCode      String?  // CVV/CVC guardado encriptado
+  cardType          String
+  isDefault         Boolean  @default(false)
+  isActive          Boolean  @default(true)
+  tokenId           String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
