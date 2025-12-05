@@ -32,14 +32,7 @@ const apiRequest = async (
   const { method = 'GET', headers = {}, body } = options;
 
   let baseUrl =
-    process.env.EXPO_PUBLIC_NGROK_URL || process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
-
-  const FALLBACK_NGROK_URL = 'https://8024cfccc3d9.ngrok-free.app';
-
-  if (!process.env.EXPO_PUBLIC_NGROK_URL && !process.env.EXPO_PUBLIC_API_URL) {
-    console.log('⚠️ Variables de entorno no disponibles en admin orders, usando fallback');
-    baseUrl = FALLBACK_NGROK_URL;
-  }
+    process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
 
   const url = `${baseUrl}${endpoint}`;
   console.log('🔗 Admin Orders - URL Base detectada:', baseUrl);

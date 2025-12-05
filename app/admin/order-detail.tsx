@@ -30,10 +30,7 @@ const apiRequest = async (
 ) => {
   const { method = 'GET', headers = {}, body } = options;
   let baseUrl =
-    process.env.EXPO_PUBLIC_NGROK_URL || process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
-  const FALLBACK_NGROK_URL = 'https://8024cfccc3d9.ngrok-free.app';
-  if (!process.env.EXPO_PUBLIC_NGROK_URL && !process.env.EXPO_PUBLIC_API_URL)
-    baseUrl = FALLBACK_NGROK_URL;
+    process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
   const url = `${baseUrl}${endpoint}`;
   const defaultHeaders = {
     'Content-Type': 'application/json',
@@ -100,9 +97,8 @@ export default function OrderDetailScreen() {
         }}
       />
       <ScrollView
-        style={styles.container}
-        contentContainerStyle={{ flexGrow: 1, alignItems: 'center' }}
-        refreshControl={<ActivityIndicator animating={refreshing} color="#ffc107" />}
+        style={[styles.container, { backgroundColor: isDark ? '#000' : '#f8f9fa' }]}
+        contentContainerStyle={styles.contentContainer}
       >
         {loading ? (
           <View style={styles.loadingContainer}>
@@ -214,13 +210,20 @@ const styles = StyleSheet.create({
     backgroundColor: '#000',
     paddingHorizontal: 0,
   },
+  contentContainer: {
+    flexGrow: 1,
+    padding: 16,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    paddingBottom: 30,
+  },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { color: '#ffc107', marginTop: 10, fontSize: 16 },
   detailBox: {
     backgroundColor: '#181824',
     borderRadius: 14,
     padding: 24,
-    marginVertical: 24,
+    marginVertical: 16,
     marginHorizontal: 'auto',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -229,7 +232,7 @@ const styles = StyleSheet.create({
     elevation: 2,
     width: '100%',
     maxWidth: 600,
-    minWidth: 280,
+    minWidth: 260,
     alignSelf: 'center',
   },
   title: {

@@ -31,9 +31,7 @@ const apiRequest = async (
   const { method = 'GET', headers = {}, body } = options;
   
   // 🔧 USAR LA MISMA URL QUE EN INICIO.TSX
-  let baseUrl = process.env.EXPO_PUBLIC_NGROK_URL || process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
-  const FALLBACK_NGROK_URL = 'https://c0b354d3a10d.ngrok-free.app';
-  if (!process.env.EXPO_PUBLIC_NGROK_URL && !process.env.EXPO_PUBLIC_API_URL) baseUrl = FALLBACK_NGROK_URL;
+  let baseUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
   
   const url = `${baseUrl}${endpoint}`;
   const defaultHeaders = {

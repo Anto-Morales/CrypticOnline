@@ -547,12 +547,9 @@ export default function PagoScreen() {
         'http://localhost:3000';
 
       // 🚨 FALLBACK URL SI LAS VARIABLES NO FUNCIONAN (ACTUALIZADA)
-      const FALLBACK_NGROK_URL = 'https://aca21624c99b.ngrok-free.app';
-
-      // 🌐 DETECCIÓN AUTOMÁTICA DE ENTORNO
-      if (!process.env.EXPO_PUBLIC_NGROK_URL && !process.env.EXPO_PUBLIC_API_URL) {
-        console.log('⚠️ Variables de entorno no disponibles en pago, usando fallback');
-        baseUrl = FALLBACK_NGROK_URL;
+      // En producción, la URL debe venir del .env
+      if (!process.env.EXPO_PUBLIC_API_URL) {
+        console.error('❌ EXPO_PUBLIC_API_URL no está configurado en .env');
       }
 
       const paymentUrl = `${baseUrl}/api/payments/create`;
