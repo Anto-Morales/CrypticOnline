@@ -1,4 +1,5 @@
 import prisma from '../prisma/db.js';
+import firebaseStorageService from '../services/firebaseStorage.js';
 
 // ==========================================
 // CONTROLADOR DE ADMINISTRACIÓN DE PRODUCTOS
@@ -163,7 +164,6 @@ export const createProduct = async (req, res) => {
       price,
       stock,
       category,
-      imageUrl,
       sizes,
       colors,
       isActive = true
@@ -199,6 +199,27 @@ export const createProduct = async (req, res) => {
       });
     }
 
+    // Procesar imagen si existe
+    let imageUrl = '';
+    if (req.file) {
+      try {
+        console.log('📤 Subiendo imagen a Firebase Storage...');
+        imageUrl = await firebaseStorageService.uploadImage(
+          req.file.buffer,
+          req.file.originalname,
+          req.file.mimetype,
+          'products'
+        );
+        console.log('✅ Imagen subida exitosamente:', imageUrl);
+      } catch (imageError) {
+        console.error('❌ Error subiendo imagen:', imageError.message);
+        return res.status(400).json({
+          error: 'Error al subir la imagen a Firebase Storage',
+          details: imageError.message
+        });
+      }
+    }
+
     const newProduct = await prisma.product.create({
       data: {
         name: name.trim(),
@@ -206,9 +227,9 @@ export const createProduct = async (req, res) => {
         price: parseFloat(price),
         stock: parseInt(stock),
         category: category?.trim() || 'GENERAL',
-        imageUrl: imageUrl?.trim() || '',
-        sizes: sizes || [],
-        colors: colors || [],
+        imageUrl: imageUrl,
+        sizes: sizes ? JSON.parse(typeof sizes === 'string' ? sizes : JSON.stringify(sizes)) : [],
+        colors: colors ? JSON.parse(typeof colors === 'string' ? colors : JSON.stringify(colors)) : [],
         isActive
       }
     });
@@ -260,6 +281,36 @@ export const updateProduct = async (req, res) => {
 
       if (duplicateName) {
         return res.status(400).json({ error: 'Ya existe un producto con ese nombre' });
+      }
+    }
+
+    // Procesar imagen si existe en la solicitud
+    if (req.file) {
+      try {
+        console.log('📤 Actualizando imagen en Firebase Storage...');
+        
+        // Si existe una imagen anterior, eliminarla
+        if (existingProduct.imageUrl) {
+          console.log('🗑️ Eliminando imagen anterior de Firebase...');
+          await firebaseStorageService.deleteImage(existingProduct.imageUrl);
+        }
+
+        // Subir nueva imagen
+        const newImageUrl = await firebaseStorageService.uploadImage(
+          req.file.buffer,
+          req.file.originalname,
+          req.file.mimetype,
+          'products'
+        );
+        
+        updateData.imageUrl = newImageUrl;
+        console.log('✅ Imagen actualizada exitosamente:', newImageUrl);
+      } catch (imageError) {
+        console.error('❌ Error actualizando imagen:', imageError.message);
+        return res.status(400).json({
+          error: 'Error al actualizar la imagen en Firebase Storage',
+          details: imageError.message
+        });
       }
     }
 
@@ -322,6 +373,18 @@ export const deleteProduct = async (req, res) => {
       return res.status(400).json({
         error: 'No se puede eliminar físicamente un producto con órdenes activas'
       });
+    }
+
+    // Eliminar imagen de Firebase si existe
+    if (product.imageUrl) {
+      try {
+        console.log('🗑️ Eliminando imagen de Firebase Storage...');
+        await firebaseStorageService.deleteImage(product.imageUrl);
+        console.log('✅ Imagen eliminada de Firebase');
+      } catch (imageError) {
+        console.warn('⚠️ Error eliminando imagen de Firebase:', imageError.message);
+        // No detener el proceso si falla la eliminación de imagen
+      }
     }
 
     if (hard === 'true') {

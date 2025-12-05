@@ -23,19 +23,24 @@ class FirebaseStorageService {
    */
   async uploadImage(fileBuffer, fileName, mimeType, folder = 'products') {
     try {
+      console.log('\n🔥 [FIREBASE] Iniciando carga de imagen');
+      console.log('📊 Buffer tamaño:', fileBuffer.length, 'bytes');
+      
       const bucket = this.getBucket();
+      console.log('✅ Bucket obtenido:', bucket.name);
       
       // Generar nombre único para el archivo
       const fileExtension = fileName.split('.').pop() || 'jpg';
       const uniqueFileName = `${folder}/${uuidv4()}-${Date.now()}.${fileExtension}`;
       
-      console.log(`📤 Subiendo imagen a Firebase Storage: ${uniqueFileName}`);
-      console.log(`📁 Bucket: ${bucket.name}`);
-      console.log(`📦 Tipo MIME: ${mimeType}`);
-      console.log(`📏 Tamaño: ${fileBuffer.length} bytes`);
+      console.log('📝 Nombre único generado:', uniqueFileName);
+      console.log('📁 Bucket:', bucket.name);
+      console.log('📦 Tipo MIME:', mimeType);
+      console.log('📏 Tamaño:', fileBuffer.length, 'bytes');
       
       // Crear referencia al archivo en Storage
       const file = bucket.file(uniqueFileName);
+      console.log('📌 Referencia de archivo creada');
       
       // Configurar metadatos
       const metadata = {
@@ -43,31 +48,40 @@ class FirebaseStorageService {
         cacheControl: 'public, max-age=31536000', // Cache por 1 año
       };
 
+      console.log('⏳ Guardando archivo en Firebase...');
       // Subir el archivo
       await file.save(fileBuffer, {
         metadata,
         public: true, // Hacer el archivo público
         validation: 'md5'
       });
+      console.log('✅ Archivo guardado en Firebase');
 
-      console.log('✅ Archivo subido, haciendo público...');
-      
+      console.log('⏳ Haciendo archivo público...');
       // Hacer el archivo público y obtener URL
       await file.makePublic();
+      console.log('✅ Archivo marcado como público');
       
       // Generar URL pública
       const publicUrl = `https://storage.googleapis.com/${bucket.name}/${uniqueFileName}`;
       
-      console.log(`✅ Imagen subida exitosamente: ${publicUrl}`);
+      console.log('✅ URL pública generada');
+      console.log('📍 URL:', publicUrl);
+      console.log('🔥 [FIREBASE] Carga completada exitosamente\n');
+      
       return publicUrl;
       
     } catch (error) {
-      console.error('❌ Error subiendo imagen a Firebase Storage:', error);
-      console.error('🔍 Detalles del error:', {
-        message: error.message,
+      console.error('\n❌ [FIREBASE] Error en uploadImage');
+      console.error('📌 Tipo de error:', error.constructor.name);
+      console.error('📝 Mensaje:', error.message);
+      console.error('🔍 Detalles:', {
         code: error.code,
-        stack: error.stack
+        status: error.status,
+        statusCode: error.statusCode
       });
+      console.error('📜 Stack:', error.stack);
+      console.error('');
       throw new Error(`Error subiendo imagen: ${error.message}`);
     }
   }
@@ -155,8 +169,13 @@ class FirebaseStorageService {
       console.log('🧪 Probando conexión a Firebase Storage...');
       const bucket = this.getBucket();
       
-      // Intentar acceder a los metadatos del bucket
-      const [metadata] = await bucket.getMetadata();
+      // Crear una promesa con timeout para evitar que WebSocket bloquee
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout en conexión a Firebase')), 5000)
+      );
+      
+      const metadataPromise = bucket.getMetadata();
+      const [metadata] = await Promise.race([metadataPromise, timeoutPromise]);
       
       console.log('✅ Conexión a Firebase Storage exitosa');
       console.log('📦 Bucket metadata:', {
@@ -168,7 +187,8 @@ class FirebaseStorageService {
       
       return true;
     } catch (error) {
-      console.error('❌ Error conectando a Firebase Storage:', error);
+      console.error('❌ Error conectando a Firebase Storage:', error.message);
+      console.error('💡 Nota: El servidor continuará funcionando sin Firebase Storage');
       return false;
     }
   }

@@ -196,6 +196,9 @@ export const adminMiddleware = async (req, res, next) => {
 // Usar adminMiddleware como isAdmin para compatibilidad
 export const isAdmin = adminMiddleware;
 
+// Alias para requireAdmin (usado en las rutas)
+export const requireAdmin = adminMiddleware;
+
 /**
  * 🛡️ Middleware mejorado para verificar niveles de administrador
  */

@@ -1,14 +1,14 @@
 import express from 'express';
 import multer from 'multer';
 import {
-  createProduct,
-  deleteProduct,
-  getProductById,
-  getProducts,
-  getProductStats,
-  seedProducts,
-  updateProduct,
-  updateStockAfterPurchase
+    createProduct,
+    deleteProduct,
+    getProductById,
+    getProducts,
+    getProductStats,
+    seedProducts,
+    updateProduct,
+    updateStockAfterPurchase
 } from '../controllers/products.controller.js';
 import { authMiddleware } from '../middleware/auth.middleware.js';
 import prisma from '../prisma/db.js';
@@ -94,48 +94,74 @@ router.post('/test-firebase-upload', upload.single('image'), async (req, res) =>
 // Crear producto con imagen en Firebase Storage
 router.post('/create-with-firebase', authMiddleware, upload.single('image'), async (req, res) => {
   try {
-    console.log('📦 [FIREBASE] Creando producto con imagen en Firebase Storage...');
-    console.log('📁 Archivo recibido:', req.file ? 'SÍ' : 'NO');
-    console.log('📋 Datos del producto:', req.body);
-    console.log('👤 Usuario autenticado:', req.user ? 'SÍ' : 'NO');
+    console.log('\n');
+    console.log('═══════════════════════════════════════════════════');
+    console.log('🚀 INICIO: Crear producto con imagen en Firebase');
+    console.log('═══════════════════════════════════════════════════');
+    
+    console.log('\n📡 PASO 1: Validar solicitud');
+    console.log('📁 Archivo recibido:', req.file ? 'SÍ ✅' : 'NO ❌');
+    if (req.file) {
+      console.log('  - Nombre:', req.file.originalname);
+      console.log('  - Tipo MIME:', req.file.mimetype);
+      console.log('  - Tamaño:', (req.file.size / 1024).toFixed(2), 'KB');
+    }
+    
+    console.log('\n📋 PASO 2: Datos del producto');
+    console.log('  - Body recibido:', JSON.stringify(req.body, null, 2));
 
     const { name, description, price, stock, category } = req.body;
 
     // Validaciones
+    console.log('\n✅ PASO 3: Validar campos requeridos');
     if (!name || !description || !price || !stock) {
+      console.error('❌ Campos faltantes:', { name: !name, description: !description, price: !price, stock: !stock });
       return res.status(400).json({
         error: 'Todos los campos son requeridos: name, description, price, stock'
       });
     }
+    console.log('✅ Todos los campos están presentes');
 
     if (!req.file) {
+      console.error('❌ No hay archivo de imagen');
       return res.status(400).json({
         error: 'La imagen es requerida'
       });
     }
+    console.log('✅ Archivo de imagen presente');
 
     // Verificar que tenemos el usuario autenticado
-    if (!req.user || !req.user.userId) {
+    console.log('\n👤 PASO 4: Verificar autenticación');
+    console.log('  - Usuario:', req.user);
+    if (!req.user) {
+      console.error('❌ Usuario no autenticado correctamente');
       return res.status(401).json({
         error: 'Usuario no autenticado correctamente'
       });
     }
+    console.log('✅ Usuario autenticado:', req.user.email, '(ID:', req.user.id, ')');
 
     let imageUrl = null;
 
     try {
       // Subir imagen a Firebase Storage
-      console.log('📤 Subiendo imagen a Firebase Storage...');
+      console.log('\n🔥 PASO 5: Subir imagen a Firebase Storage');
+      console.log('📤 Iniciando carga...');
+      
       imageUrl = await firebaseStorageService.uploadImage(
         req.file.buffer,
         req.file.originalname,
         req.file.mimetype,
         'products'
       );
-      console.log('✅ Imagen subida a Firebase:', imageUrl);
+      
+      console.log('✅ Imagen subida exitosamente');
+      console.log('  - URL:', imageUrl);
 
     } catch (uploadError) {
-      console.error('❌ Error subiendo imagen a Firebase:', uploadError);
+      console.error('❌ PASO 5: Error subiendo imagen a Firebase');
+      console.error('  - Error:', uploadError.message);
+      console.error('  - Stack:', uploadError.stack);
       return res.status(500).json({
         error: 'Error subiendo imagen a Firebase Storage',
         details: uploadError.message
@@ -143,19 +169,31 @@ router.post('/create-with-firebase', authMiddleware, upload.single('image'), asy
     }
 
     // Crear producto en base de datos con la URL de Firebase
+    console.log('\n💾 PASO 6: Crear producto en PostgreSQL');
+    console.log('  - Nombre:', name);
+    console.log('  - Precio:', price);
+    console.log('  - Stock:', stock);
+    console.log('  - Imagen URL:', imageUrl);
+    console.log('  - Usuario ID:', req.user.id);
+    
     const product = await prisma.product.create({
       data: {
         name: name.trim(),
         description: description.trim(),
         price: parseFloat(price),
         stock: parseInt(stock),
-        category: category || null,
         imageUrl: imageUrl, // Guardar URL de Firebase Storage
-        userId: req.user.userId // Usar userId directamente
+        userId: req.user.id // Usar id del usuario (NOT userId)
       },
     });
 
-    console.log('✅ Producto creado exitosamente:', product);
+    console.log('✅ Producto creado en PostgreSQL');
+    console.log('  - ID:', product.id);
+    console.log('  - Nombre:', product.name);
+
+    console.log('\n═══════════════════════════════════════════════════');
+    console.log('✅ ÉXITO: Producto creado exitosamente');
+    console.log('═══════════════════════════════════════════════════\n');
 
     res.status(201).json({
       message: 'Producto creado exitosamente con imagen en Firebase Storage',
@@ -172,15 +210,20 @@ router.post('/create-with-firebase', authMiddleware, upload.single('image'), asy
     });
 
   } catch (error) {
-    console.error('❌ Error completo creando producto:', error);
+    console.error('\n❌ ERROR CRÍTICO en crear producto:');
+    console.error('  - Tipo de error:', error.constructor.name);
+    console.error('  - Mensaje:', error.message);
+    console.error('  - Stack:', error.stack);
+    console.error('═══════════════════════════════════════════════════\n');
     
     // Si hay error después de subir la imagen, intentar eliminarla de Firebase
     if (imageUrl) {
       try {
+        console.log('🧹 Intentando limpiar imagen de Firebase...');
         await firebaseStorageService.deleteImage(imageUrl);
-        console.log('🧹 Imagen eliminada de Firebase por error en creación');
+        console.log('✅ Imagen eliminada de Firebase por error en creación');
       } catch (cleanupError) {
-        console.error('❌ Error limpiando imagen de Firebase:', cleanupError);
+        console.error('❌ Error limpiando imagen de Firebase:', cleanupError.message);
       }
     }
     
@@ -205,7 +248,7 @@ router.put('/update-with-firebase/:id', authMiddleware, upload.single('image'), 
     }
 
     // Verificar que tenemos el usuario autenticado
-    if (!req.user || !req.user.userId) {
+    if (!req.user || !req.user.id) {
       return res.status(401).json({
         error: 'Usuario no autenticado correctamente'
       });
@@ -215,7 +258,7 @@ router.put('/update-with-firebase/:id', authMiddleware, upload.single('image'), 
     const existingProduct = await prisma.product.findFirst({
       where: { 
         id: productId,
-        userId: req.user.userId // Solo puede editar sus propios productos
+        userId: req.user.id // Solo puede editar sus propios productos
       }
     });
 
@@ -308,7 +351,7 @@ router.delete('/delete-with-firebase/:id', authMiddleware, async (req, res) => {
     }
 
     // Verificar que tenemos el usuario autenticado
-    if (!req.user || !req.user.userId) {
+    if (!req.user || !req.user.id) {
       return res.status(401).json({
         error: 'Usuario no autenticado correctamente'
       });
@@ -318,7 +361,7 @@ router.delete('/delete-with-firebase/:id', authMiddleware, async (req, res) => {
     const existingProduct = await prisma.product.findFirst({
       where: { 
         id: productId,
-        userId: req.user.userId // Solo puede eliminar sus propios productos
+        userId: req.user.id // Solo puede eliminar sus propios productos
       }
     });
 

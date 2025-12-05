@@ -24,11 +24,11 @@ model User {
   referencias     String
   wallet          String?
   role            String         @default("customer")
-  adminLevel      AdminLevel?    // Nivel de admin si role es admin
-  permissions     Json?          // Permisos específicos en JSON
   isActive        Boolean        @default(true)
   createdAt       DateTime       @default(now())
-  createdBy       Int?           // ID del admin que creó este usuario
+  adminLevel      AdminLevel?
+  createdBy       Int?
+  permissions     Json?
   notifications   Notification[]
   orders          Order[]        @relation("UserOrders")
   paymentCards    PaymentCard[]
@@ -141,6 +141,17 @@ model Promotion {
   createdAt   DateTime @default(now())
 }
 
+model CryptoPayment {
+  id        Int      @id @default(autoincrement())
+  orderId   Int
+  address   String
+  amount    Float
+  status    String   @default("PENDING")
+  txHash    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 enum OrderStatus {
   PENDING
   PAID
@@ -161,15 +172,3 @@ enum AdminLevel {
   MODERATOR
   SUPPORT
 }
-
-model CryptoPayment {
-  id        Int      @id @default(autoincrement())
-  orderId   Int
-  address   String
-  amount    Float
-  status    String   @default("PENDING") // PENDING | CONFIRMED | FAILED
-  txHash    String?  // cuando se confirme
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-

@@ -5,8 +5,8 @@ dotenv.config();
 import fs from "fs";
 const usdtAbi = JSON.parse(fs.readFileSync(new URL("../abis/usdtAbi.json", import.meta.url)));
 
-import { ethers } from "ethers";
 import { PrismaClient } from "@prisma/client";
+import { ethers } from "ethers";
 
 const prisma = new PrismaClient();
 const HTTP_PROVIDER = process.env.POLYGON_RPC_URL;
@@ -24,9 +24,17 @@ const ERC20_ABI = [
 let httpProvider = new ethers.JsonRpcProvider(HTTP_PROVIDER);
 let wsProvider;
 try {
-  if (WSS_PROVIDER) wsProvider = new ethers.WebSocketProvider(WSS_PROVIDER);
+  if (WSS_PROVIDER) {
+    try {
+      wsProvider = new ethers.WebSocketProvider(WSS_PROVIDER);
+      console.log("✅ WebSocket provider inicializado");
+    } catch (wsError) {
+      console.warn("⚠️ Error al crear WebSocket provider:", wsError.message);
+      wsProvider = null;
+    }
+  }
 } catch (e) {
-  console.warn("No WebSocket provider available:", e.message);
+  console.warn("⚠️ No WebSocket provider available:", e.message);
   wsProvider = null;
 }
 // Crear contrato HTTP del token USDT para leer datos básicos (como decimals)
@@ -256,23 +264,29 @@ export async function startBlockchainService() {
   // intentar register listeners via websocket
   try {
     if (wsProvider && wsContract) {
-      await setupEventListeners();
+      try {
+        await setupEventListeners();
+        console.log("✅ Event listeners WebSocket configurados");
 
-      // manejar reconexiones simples
-      wsProvider._websocket?.on("close", async () => {
-        console.warn("WebSocket cerrado — reintentando conectar en 5s.");
-        setTimeout(() => {
-          // Para simplicidad recargar proceso o re-instanciar provider (puedes mejorar esto)
-          process.exit(1);
-        }, 5000);
-      });
+        // manejar reconexiones simples
+        wsProvider._websocket?.on("close", async () => {
+          console.warn("⚠️ WebSocket cerrado — continuando con polling");
+        });
+      } catch (wsErr) {
+        console.warn("⚠️ No se pudo configurar WebSocket listeners:", wsErr.message);
+        console.log("💡 Continuando solo con polling...");
+      }
     } else {
-      console.warn("WebSocket no disponible, usando solo polling.");
+      console.warn("⚠️ WebSocket no disponible, usando solo polling.");
     }
   } catch (err) {
-    console.error("Error al registrar listeners:", err);
+    console.error("❌ Error al registrar listeners:", err);
   }
 
   // iniciar polling siempre (actúa también como verificador y como fallback)
-  pollingLoop().catch((e) => console.error("Polling stopped:", e));
+  try {
+    pollingLoop().catch((e) => console.error("❌ Polling stopped:", e));
+  } catch (pollErr) {
+    console.error("❌ Error iniciando polling:", pollErr);
+  }
 }

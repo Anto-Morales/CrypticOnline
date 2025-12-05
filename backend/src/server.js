@@ -53,13 +53,20 @@ const initializeServices = async () => {
     initializeFirebase();
     console.log('✅ Firebase Admin SDK inicializado');
     
-    // Test de conexión a Firebase Storage
-    const storageConnected = await firebaseStorageService.testConnection();
-    if (storageConnected) {
-      console.log('✅ Firebase Storage conectado correctamente');
-    } else {
-      console.error('❌ Error conectando a Firebase Storage');
-    }
+    // Test de conexión a Firebase Storage (no bloquea el servidor)
+    // Ejecutar en background sin await para no bloquear startup
+    firebaseStorageService.testConnection()
+      .then(storageConnected => {
+        if (storageConnected) {
+          console.log('✅ Firebase Storage conectado correctamente');
+        } else {
+          console.warn('⚠️ Firebase Storage no disponible, continuando sin él...');
+        }
+      })
+      .catch(error => {
+        console.error('❌ Error probando Firebase Storage:', error.message);
+        console.warn('⚠️ Continuando sin Firebase Storage...');
+      });
     
   } catch (error) {
     console.error('❌ Error inicializando servicios:', error);
@@ -439,9 +446,16 @@ const startServer = async () => {
     console.log(`🧪 Test Firebase: GET /api/firebase/test`);
     console.log('🚀 ===================================');
 
-     try {
-      await startBlockchainService();
-      console.log('Servicio de blockchain iniciado correctamente');
+    // Iniciar blockchain service en background sin bloquear
+    try {
+      startBlockchainService()
+        .then(() => {
+          console.log('✅ Servicio de blockchain iniciado correctamente');
+        })
+        .catch((err) => {
+          console.error('❌ Error iniciando blockchain service:', err.message);
+          console.warn('⚠️ Continuando sin blockchain service...');
+        });
     } catch (err) {
       console.error('❌ Error iniciando el servicio de blockchain:', err);
     }
